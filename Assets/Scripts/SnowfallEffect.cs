@@ -1,191 +1,191 @@
 using UnityEngine;
+using System.Collections.Generic;
 
-/// <summary>
-/// Creates a dynamic snowfall effect with particle system.
-/// Falls relative to camera movement for immersive experience.
-/// </summary>
-[RequireComponent(typeof(ParticleSystem))]
 public class SnowfallEffect : MonoBehaviour
 {
-    [Header("Snow Settings")]
-    [SerializeField] private int snowflakeCount = 200;
-    [SerializeField] private float snowflakeSizeMin = 0.05f;
-    [SerializeField] private float snowflakeSizeMax = 0.2f;
+    [Header("Snowflake Settings")]
+    [SerializeField] private int snowflakeCount = 100;
+    [SerializeField] private GameObject snowflakePrefab;
+    [SerializeField] private float spawnAreaWidth = 20f;
+    [SerializeField] private float spawnAreaHeight = 15f;
     [SerializeField] private float fallSpeedMin = 1f;
-    [SerializeField] private float fallSpeedMax = 3f;
-    [SerializeField] private float driftSpeed = 0.5f;
-    
-    [Header("Area Settings")]
-    [SerializeField] private Vector2 spawnAreaSize = new Vector2(50f, 30f);
-    [SerializeField] private float spawnHeightAboveCamera = 10f;
-    [SerializeField] private Transform cameraFollowTarget;
-    
-    [Header("Wind Effect")]
-    [SerializeField] private bool enableWind = true;
+    [SerializeField] private float fallSpeedMax = 4f;
+    [SerializeField] private float driftSpeedMin = -0.5f;
+    [SerializeField] private float driftSpeedMax = 0.5f;
+    [SerializeField] private float windStrength = 0.5f;
     [SerializeField] private float windChangeInterval = 5f;
-    [SerializeField] private float maxWindStrength = 2f;
-    [SerializeField] private float windStrengthVariation = 0.5f;
-    
-    // Components
-    private ParticleSystem particles;
-    private ParticleSystem.MainModule mainModule;
-    private ParticleSystem.EmissionModule emissionModule;
-    private ParticleSystem.ShapeModule shapeModule;
-    private ParticleSystem.VelocityOverLifetimeModule velocityModule;
-    
-    // Wind state
-    private float currentWindDirection = 1f;
-    private float targetWindDirection = 1f;
-    private float windChangeTimer;
-    
-    // Camera tracking
-    private Vector3 lastCameraPosition;
-    
+
+    [Header("Scaling")]
+    [SerializeField] private float scaleMin = 0.3f;
+    [SerializeField] private float scaleMax = 1f;
+
+    [Header("Visibility Zone")]
+    [SerializeField] private Transform playerTransform;
+    [SerializeField] private float followPlayerX = 0f;
+    [SerializeField] private float followPlayerY = 0f;
+
+    [Header("Weather Intensity")]
+    [Range(0f, 1f)]
+    [SerializeField] private float weatherIntensity = 0.7f;
+    [SerializeField] private float intensityTransitionSpeed = 0.5f;
+
+    private List<Snowflake> snowflakes = new();
+    private Vector3 spawnOrigin;
+    private float windDirection = 1f;
+    private float windTimer;
+    private float currentIntensity;
+    private Camera mainCamera;
+
+    private class Snowflake
+    {
+        public GameObject gameObject;
+        public float fallSpeed;
+        public float driftSpeed;
+        public float scale;
+        public float rotationSpeed;
+        public float opacity;
+        public float x;
+        public float y;
+    }
+
     private void Awake()
     {
-        particles = GetComponent<ParticleSystem>();
-        CacheModules();
+        mainCamera = Camera.main;
     }
-    
+
     private void Start()
     {
-        SetupParticleSystem();
-        FindCamera();
+        currentIntensity = weatherIntensity;
+        spawnOrigin = transform.position;
+        InitializeSnowflakes();
     }
-    
-    private void CacheModules()
-    {
-        mainModule = particles.main;
-        emissionModule = particles.emission;
-        shapeModule = particles.shape;
-        velocityModule = particles.velocityOverLifetime;
-    }
-    
-    private void SetupParticleSystem()
-    {
-        mainModule.maxParticles = snowflakeCount * 2;
-        mainModule.simulationSpace = ParticleSystemSimulationSpace.World;
-        mainModule.gravityModifier = 1f;
-        
-        emissionModule.rateOverTime = snowflakeCount * 0.5f;
-        
-        shapeModule.shapeType = ParticleSystemShapeType.Box;
-        shapeModule.scale = new Vector3(spawnAreaSize.x, spawnAreaSize.y, 1f);
-        
-        SetupParticleColor();
-        SetupParticleSize();
-        SetupParticleMovement();
-    }
-    
-    private void SetupParticleColor()
-    {
-        ParticleSystem.MinMaxGradient gradient = new ParticleSystem.MinMaxGradient(
-            new Color(1f, 1f, 1f, 0.8f),
-            new Color(0.9f, 0.95f, 1f, 0.4f)
-        );
-        mainModule.startColor = gradient;
-    }
-    
-    private void SetupParticleSize()
-    {
-        ParticleSystem.MinMaxCurve sizeCurve = new ParticleSystem.MinMaxCurve();
-        sizeCurve.mode = ParticleSystemCurveMode.TwoConstants;
-        sizeCurve.constantMin = snowflakeSizeMin;
-        sizeCurve.constantMax = snowflakeSizeMax;
-        mainModule.startSize = sizeCurve;
-    }
-    
-    private void SetupParticleMovement()
-    {
-        velocityModule.space = ParticleSystemSimulationSpace.World;
-        
-        ParticleSystem.MinMaxCurve xVelocity = new ParticleSystem.MinMaxCurve();
-        xVelocity.constant = driftSpeed;
-        velocityModule.x = xVelocity;
-        
-        ParticleSystem.MinMaxCurve yVelocity = new ParticleSystem.MinMaxCurve();
-        yVelocity.mode = ParticleSystemCurveMode.TwoConstants;
-        yVelocity.constantMin = -fallSpeedMin;
-        yVelocity.constantMax = -fallSpeedMax;
-        velocityModule.y = yVelocity;
-    }
-    
-    private void FindCamera()
-    {
-        if (cameraFollowTarget == null)
-        {
-            Camera cam = Camera.main;
-            if (cam != null)
-            {
-                cameraFollowTarget = cam.transform;
-            }
-        }
-    }
-    
+
     private void Update()
     {
-        UpdateParticlePosition();
         UpdateWind();
+        UpdateSnowfall();
+        FollowPlayer();
     }
-    
-    private void UpdateParticlePosition()
+
+    private void InitializeSnowflakes()
     {
-        if (cameraFollowTarget != null)
+        for (int i = 0; i < snowflakeCount; i++)
         {
-            Vector3 cameraPos = cameraFollowTarget.position;
-            transform.position = new Vector3(
-                cameraPos.x,
-                cameraPos.y + spawnHeightAboveCamera,
-                0f
-            );
-            
-            lastCameraPosition = cameraPos;
+            SpawnSnowflake(Random.Range(-spawnAreaWidth / 2f, spawnAreaWidth / 2f),
+                           Random.Range(-spawnAreaHeight / 2f, spawnAreaHeight / 2f));
         }
     }
-    
+
+    private void SpawnSnowflake(float x, float y)
+    {
+        GameObject obj;
+        if (snowflakePrefab != null)
+        {
+            obj = Instantiate(snowflakePrefab, spawnOrigin + new Vector3(x, y, 0), Quaternion.identity, transform);
+        }
+        else
+        {
+            obj = new GameObject("Snowflake");
+            obj.transform.parent = transform;
+            obj.transform.position = spawnOrigin + new Vector3(x, y, 0);
+            SpriteRenderer sr = obj.AddComponent<SpriteRenderer>();
+            sr.color = new Color(1f, 1f, 1f, 0.8f);
+        }
+
+        float scale = Random.Range(scaleMin, scaleMax);
+        obj.transform.localScale = Vector3.one * scale;
+
+        snowflakes.Add(new Snowflake
+        {
+            gameObject = obj,
+            fallSpeed = Random.Range(fallSpeedMin, fallSpeedMax),
+            driftSpeed = Random.Range(driftSpeedMin, driftSpeedMax),
+            scale = scale,
+            rotationSpeed = Random.Range(-180f, 180f),
+            opacity = Random.Range(0.4f, 0.9f),
+            x = x,
+            y = y
+        });
+    }
+
     private void UpdateWind()
     {
-        if (!enableWind) return;
-        
-        windChangeTimer += Time.deltaTime;
-        
-        if (windChangeTimer >= windChangeInterval)
+        windTimer += Time.deltaTime;
+        if (windTimer >= windChangeInterval)
         {
-            windChangeTimer = 0f;
-            targetWindDirection = Random.Range(-1f, 1f);
+            windTimer = 0f;
+            windDirection = Random.Range(-1f, 1f);
         }
-        
-        currentWindDirection = Mathf.Lerp(currentWindDirection, targetWindDirection, Time.deltaTime * windStrengthVariation);
-        
-        ParticleSystem.MinMaxCurve xVelocity = new ParticleSystem.MinMaxCurve();
-        xVelocity.constant = currentWindDirection * driftSpeed * maxWindStrength;
-        velocityModule.x = xVelocity;
+
+        currentIntensity = Mathf.Lerp(currentIntensity, weatherIntensity, intensityTransitionSpeed * Time.deltaTime);
     }
-    
-    public void SetIntensity(float multiplier)
+
+    private void UpdateSnowfall()
     {
-        emissionModule.rateOverTime = snowflakeCount * 0.5f * multiplier;
+        float halfWidth = spawnAreaWidth / 2f;
+        float halfHeight = spawnAreaHeight / 2f;
+
+        foreach (Snowflake sf in snowflakes)
+        {
+            if (sf.gameObject == null) continue;
+
+            float adjustedFallSpeed = sf.fallSpeed * currentIntensity;
+            float adjustedWind = (windDirection * windStrength) + (sf.driftSpeed * currentIntensity);
+
+            sf.y -= adjustedFallSpeed * Time.deltaTime;
+            sf.x += adjustedWind * Time.deltaTime;
+
+            sf.gameObject.transform.position = spawnOrigin + new Vector3(sf.x, sf.y, 0);
+            sf.gameObject.transform.Rotate(0f, 0f, sf.rotationSpeed * Time.deltaTime);
+
+            if (sf.y < -halfHeight)
+            {
+                sf.y = halfHeight;
+                sf.x = Random.Range(-halfWidth, halfWidth);
+            }
+
+            if (sf.x < -halfWidth)
+                sf.x = halfWidth;
+            else if (sf.x > halfWidth)
+                sf.x = -halfWidth;
+        }
     }
-    
-    public void SetSnowflakeSize(float minSize, float maxSize)
+
+    private void FollowPlayer()
     {
-        snowflakeSizeMin = minSize;
-        snowflakeSizeMax = maxSize;
-        SetupParticleSize();
+        if (playerTransform != null)
+        {
+            spawnOrigin.x = playerTransform.position.x + followPlayerX;
+            spawnOrigin.y = playerTransform.position.y + followPlayerY;
+        }
     }
-    
+
+    public void SetWeatherIntensity(float intensity)
+    {
+        weatherIntensity = Mathf.Clamp01(intensity);
+    }
+
     public void SetWindStrength(float strength)
     {
-        maxWindStrength = Mathf.Max(0f, strength);
+        windStrength = Mathf.Clamp01(strength);
     }
-    
-    private void OnDrawGizmosSelected()
+
+    public void EnableBlizzard(float duration)
     {
-        Gizmos.color = new Color(0.5f, 0.8f, 1f, 0.3f);
-        
-        Vector3 center = transform.position;
-        Vector3 size = new Vector3(spawnAreaSize.x, spawnAreaSize.y, 1f);
-        
-        Gizmos.DrawWireCube(center, size);
+        StartCoroutine(BlizzardCoroutine(duration));
+    }
+
+    private System.Collections.IEnumerator BlizzardCoroutine(float duration)
+    {
+        float originalIntensity = weatherIntensity;
+        float originalWind = windStrength;
+
+        weatherIntensity = 1f;
+        windStrength = 1.5f;
+
+        yield return new WaitForSeconds(duration);
+
+        weatherIntensity = originalIntensity;
+        windStrength = originalWind;
     }
 }

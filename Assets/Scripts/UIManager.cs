@@ -1,213 +1,270 @@
 using UnityEngine;
 using UnityEngine.UI;
-using UnityEngine.SceneManagement;
+using TMPro;
+using System.Collections.Generic;
+using System;
 
-/// <summary>
-/// Simple UIManager for Snow Boarder game.
-/// Handles all UI transitions and button clicks.
-/// </summary>
 public class UIManager : MonoBehaviour
 {
     public static UIManager Instance { get; private set; }
 
-    // UI References
-    private Text scoreText;
-    private Text livesText;
-    private Text highScoreText;
-    private Text comboText;
+    [Header("Canvas References")]
+    [SerializeField] private Canvas mainMenuCanvas;
+    [SerializeField] private Canvas gameHUDCanvas;
+    [SerializeField] private Canvas pauseMenuCanvas;
+    [SerializeField] private Canvas gameOverCanvas;
+    [SerializeField] private Canvas levelCompleteCanvas;
+    [SerializeField] private Canvas optionsCanvas;
+
+    [Header("Main Menu Buttons")]
+    [SerializeField] private Button startButton;
+    [SerializeField] private Button optionsButton;
+    [SerializeField] private Button quitButton;
+
+    [Header("HUD References")]
+    [SerializeField] private TextMeshProUGUI scoreText;
+    [SerializeField] private TextMeshProUGUI speedText;
+    [SerializeField] private TextMeshProUGUI livesText;
+    [SerializeField] private TextMeshProUGUI comboText;
+    [SerializeField] private TextMeshProUGUI multiplierText;
+    [SerializeField] private Image livesIcon;
+    [SerializeField] private GameObject comboDisplay;
+
+    [Header("Game Over")]
+    [SerializeField] private TextMeshProUGUI gameOverScoreText;
+    [SerializeField] private Button restartButton;
+    [SerializeField] private Button menuButton;
+
+    [Header("Level Complete")]
+    [SerializeField] private TextMeshProUGUI finalScoreText;
+    [SerializeField] private TextMeshProUGUI timeBonusText;
+    [SerializeField] private Button nextLevelButton;
+    [SerializeField] private Button replayButton;
+    [SerializeField] private Button completeMenuButton;
+
+    [Header("Pause Menu")]
+    [SerializeField] private Button resumeButton;
+    [SerializeField] private Button pauseRestartButton;
+    [SerializeField] private Button pauseMenuButton;
+
+    [Header("Options")]
+    [SerializeField] private Slider masterVolumeSlider;
+    [SerializeField] private Slider musicVolumeSlider;
+    [SerializeField] private Slider sfxVolumeSlider;
+    [SerializeField] private Toggle fullscreenToggle;
+    [SerializeField] private TMP_Dropdown qualityDropdown;
+    [SerializeField] private Button optionsBackButton;
+
+    [Header("Feedback")]
+    [SerializeField] private TextMeshProUGUI notificationText;
+    [SerializeField] private float notificationDuration = 2f;
+
+    [Header("Transitions")]
+    [SerializeField] private CanvasGroup fadeCanvasGroup;
+    [SerializeField] private float fadeSpeed = 1f;
+
+    private List<GameObject> activeNotifications = new();
+    private float notificationTimer;
+    private bool isFading;
 
     private void Awake()
     {
-        if (Instance == null)
-        {
-            Instance = this;
-        }
-        else
+        if (Instance != null && Instance != this)
         {
             Destroy(gameObject);
             return;
         }
+        Instance = this;
     }
 
     private void Start()
     {
-        SetupAllButtons();
-        SetupUITexts();
-        ShowMainMenu();
-    }
-
-    private void SetupUITexts()
-    {
-        // Find UI texts by name
-        Text[] allTexts = FindObjectsOfType<Text>();
-        foreach (Text t in allTexts)
-        {
-            if (t.gameObject.name == "ScoreText") scoreText = t;
-            else if (t.gameObject.name == "LivesText") livesText = t;
-            else if (t.gameObject.name == "HighScoreText") highScoreText = t;
-            else if (t.gameObject.name == "ComboText") comboText = t;
-        }
-    }
-
-    private void SetupAllButtons()
-    {
-        Button[] allButtons = FindObjectsOfType<Button>();
-        foreach (Button btn in allButtons)
-        {
-            string btnName = btn.gameObject.name;
-            
-            // Remove existing listeners
-            btn.onClick.RemoveAllListeners();
-            
-            // Main Menu buttons
-            if (btnName == "StartButton")
-                btn.onClick.AddListener(OnStartClicked);
-            else if (btnName == "HowToButton")
-                btn.onClick.AddListener(OnShowHowToPlay);
-            else if (btnName == "CloseButton")
-                btn.onClick.AddListener(OnCloseHowToPlay);
-            else if (btnName == "QuitButton")
-                btn.onClick.AddListener(OnQuitClicked);
-            
-            // Pause Menu buttons
-            else if (btnName == "PauseButton")
-                btn.onClick.AddListener(OnPauseClicked);
-            else if (btnName == "ResumeButton")
-                btn.onClick.AddListener(OnResumeClicked);
-            else if (btnName == "RestartButton")
-                btn.onClick.AddListener(OnRestartClicked);
-            
-            // Game Over buttons
-            else if (btnName == "PlayAgainButton")
-                btn.onClick.AddListener(OnRestartClicked);
-            
-            // Level Complete buttons
-            else if (btnName == "NextLevelButton")
-                btn.onClick.AddListener(OnNextLevelClicked);
-            else if (btnName == "RetryButton")
-                btn.onClick.AddListener(OnRetryClicked);
-            
-            // Menu buttons (appear in multiple screens)
-            else if (btnName == "MainMenuButton")
-                btn.onClick.AddListener(OnMainMenuClicked);
-            else if (btnName == "ReturnMenuButton")
-                btn.onClick.AddListener(OnMainMenuClicked);
-        }
-    }
-
-    // ═══════════════════════════════════════════════════════════
-    // MAIN MENU
-    // ═══════════════════════════════════════════════════════════
-    
-    public void OnStartClicked()
-    {
-        Debug.Log("[UIManager] Start Game clicked");
-        SceneManager.LoadScene("Level1");
-    }
-
-    public void OnShowHowToPlay()
-    {
-        Debug.Log("[UIManager] Show How To Play");
+        SetupButtonListeners();
+        LoadPlayerPrefs();
         HideAllCanvases();
-        ShowCanvasByName("HowToPlayPanel");
+
+        if (mainMenuCanvas != null)
+            mainMenuCanvas.gameObject.SetActive(true);
     }
 
-    public void OnCloseHowToPlay()
+    private void Update()
     {
-        Debug.Log("[UIManager] Close How To Play");
-        HideAllCanvases();
-        ShowCanvasByName("MainMenuCanvas");
-    }
-
-    public void OnQuitClicked()
-    {
-        Debug.Log("[UIManager] Quit clicked");
-#if UNITY_EDITOR
-        UnityEditor.EditorApplication.isPlaying = false;
-#else
-        Application.Quit();
-#endif
-    }
-
-    // ═══════════════════════════════════════════════════════════
-    // IN-GAME UI
-    // ═══════════════════════════════════════════════════════════
-
-    public void OnPauseClicked()
-    {
-        Debug.Log("[UIManager] Pause clicked");
-        Time.timeScale = 0f;
-        HideCanvasByName("HUDCanvas");
-        ShowCanvasByName("PauseMenuCanvas");
-    }
-
-    public void OnResumeClicked()
-    {
-        Debug.Log("[UIManager] Resume clicked");
-        Time.timeScale = 1f;
-        HideCanvasByName("PauseMenuCanvas");
-        ShowCanvasByName("HUDCanvas");
-    }
-
-    public void OnRestartClicked()
-    {
-        Debug.Log("[UIManager] Restart clicked");
-        Time.timeScale = 1f;
-        string sceneName = SceneManager.GetActiveScene().name;
-        SceneManager.LoadScene(sceneName);
-    }
-
-    public void OnMainMenuClicked()
-    {
-        Debug.Log("[UIManager] Main Menu clicked");
-        Time.timeScale = 1f;
-        SceneManager.LoadScene("MainMenuScreen");
-    }
-
-    // ═══════════════════════════════════════════════════════════
-    // LEVEL TRANSITIONS
-    // ═══════════════════════════════════════════════════════════
-
-    public void OnNextLevelClicked()
-    {
-        Debug.Log("[UIManager] Next Level clicked");
-        Time.timeScale = 1f;
-        string currentScene = SceneManager.GetActiveScene().name;
-        
-        if (currentScene == "Level1")
+        if (GameManager.Instance == null) return;
+        if (GameManager.Instance.CurrentState == GameManager.GameState.Playing)
         {
-            SceneManager.LoadScene("Level2");
+            UpdateHUD();
         }
-        else
+        UpdateNotifications();
+    }
+
+    private void SetupButtonListeners()
+    {
+        if (startButton != null)
+            startButton.onClick.AddListener(() => StartGame());
+
+        if (optionsButton != null)
+            optionsButton.onClick.AddListener(() => ShowOptions());
+
+        if (quitButton != null)
+            quitButton.onClick.AddListener(() => GameManager.Instance.QuitGame());
+
+        if (resumeButton != null)
+            resumeButton.onClick.AddListener(() => GameManager.Instance.ResumeGame());
+
+        if (pauseRestartButton != null)
+            pauseRestartButton.onClick.AddListener(() => GameManager.Instance.RestartLevel());
+
+        if (pauseMenuButton != null)
+            pauseMenuButton.onClick.AddListener(() => GameManager.Instance.ReturnToMenu());
+
+        if (restartButton != null)
+            restartButton.onClick.AddListener(() => GameManager.Instance.RestartLevel());
+
+        if (menuButton != null)
+            menuButton.onClick.AddListener(() => GameManager.Instance.ReturnToMenu());
+
+        if (nextLevelButton != null)
+            nextLevelButton.onClick.AddListener(() => GameManager.Instance.RestartLevel());
+
+        if (replayButton != null)
+            replayButton.onClick.AddListener(() => GameManager.Instance.RestartLevel());
+
+        if (completeMenuButton != null)
+            completeMenuButton.onClick.AddListener(() => GameManager.Instance.ReturnToMenu());
+
+        if (optionsBackButton != null)
+            optionsBackButton.onClick.AddListener(() => HideOptions());
+
+        if (masterVolumeSlider != null)
+            masterVolumeSlider.onValueChanged.AddListener(OnMasterVolumeChanged);
+
+        if (musicVolumeSlider != null)
+            musicVolumeSlider.onValueChanged.AddListener(OnMusicVolumeChanged);
+
+        if (sfxVolumeSlider != null)
+            sfxVolumeSlider.onValueChanged.AddListener(OnSFXVolumeChanged);
+
+        if (fullscreenToggle != null)
+            fullscreenToggle.onValueChanged.AddListener(OnFullscreenToggled);
+
+        if (qualityDropdown != null)
+            qualityDropdown.onValueChanged.AddListener(OnQualityChanged);
+    }
+
+    private void LoadPlayerPrefs()
+    {
+        if (masterVolumeSlider != null)
+            masterVolumeSlider.value = PlayerPrefs.GetFloat("MasterVolume", 1f);
+        if (musicVolumeSlider != null)
+            musicVolumeSlider.value = PlayerPrefs.GetFloat("MusicVolume", 0.8f);
+        if (sfxVolumeSlider != null)
+            sfxVolumeSlider.value = PlayerPrefs.GetFloat("SFXVolume", 1f);
+        if (fullscreenToggle != null)
+            fullscreenToggle.isOn = PlayerPrefs.GetInt("Fullscreen", 1) == 1;
+    }
+
+    private void HideAllCanvases()
+    {
+        void SetActive(Canvas c, bool active)
         {
-            // Completed Level 2 - Victory!
-            SceneManager.LoadScene("MainMenuScreen");
+            if (c != null) c.gameObject.SetActive(active);
+        }
+
+        SetActive(mainMenuCanvas, false);
+        SetActive(gameHUDCanvas, false);
+        SetActive(pauseMenuCanvas, false);
+        SetActive(gameOverCanvas, false);
+        SetActive(levelCompleteCanvas, false);
+        SetActive(optionsCanvas, false);
+    }
+
+    private void StartGame()
+    {
+        GameManager.Instance.StartGame();
+        HideAllCanvases();
+        if (gameHUDCanvas != null)
+            gameHUDCanvas.gameObject.SetActive(true);
+
+        if (ScoreManager.Instance != null)
+            ScoreManager.Instance.Reset();
+    }
+
+    public void ShowPauseMenu()
+    {
+        HideAllCanvases();
+        if (pauseMenuCanvas != null)
+            pauseMenuCanvas.gameObject.SetActive(true);
+    }
+
+    public void HidePauseMenu()
+    {
+        if (pauseMenuCanvas != null)
+            pauseMenuCanvas.gameObject.SetActive(false);
+        if (GameManager.Instance.CurrentState == GameManager.GameState.Playing)
+            if (gameHUDCanvas != null)
+                gameHUDCanvas.gameObject.SetActive(true);
+    }
+
+    public void ShowGameOver(int finalScore)
+    {
+        HideAllCanvases();
+        if (gameOverCanvas != null)
+        {
+            gameOverCanvas.gameObject.SetActive(true);
+            if (gameOverScoreText != null)
+                gameOverScoreText.text = $"Final Score: {finalScore:N0}";
         }
     }
 
-    public void OnRetryClicked()
+    public void ShowLevelComplete(int finalScore)
     {
-        Debug.Log("[UIManager] Retry clicked");
-        Time.timeScale = 1f;
-        string sceneName = SceneManager.GetActiveScene().name;
-        SceneManager.LoadScene(sceneName);
-    }
-
-    public void OnShowLevelComplete()
-    {
-        Debug.Log("[UIManager] Show Level Complete");
         HideAllCanvases();
-        ShowCanvasByName("LevelCompleteCanvas");
+        if (levelCompleteCanvas != null)
+        {
+            levelCompleteCanvas.gameObject.SetActive(true);
+            if (finalScoreText != null)
+                finalScoreText.text = $"Score: {finalScore:N0}";
+        }
     }
 
-    // ═══════════════════════════════════════════════════════════
-    // UI UPDATE METHODS (for other scripts to call)
-    // ═══════════════════════════════════════════════════════════
-
-    public void UpdateScore(int score)
+    public void ShowOptions()
     {
-        if (scoreText != null)
-            scoreText.text = $"Score: {score}";
+        HideAllCanvases();
+        if (optionsCanvas != null)
+            optionsCanvas.gameObject.SetActive(true);
+    }
+
+    public void HideOptions()
+    {
+        if (optionsCanvas != null)
+            optionsCanvas.gameObject.SetActive(false);
+        if (mainMenuCanvas != null)
+            mainMenuCanvas.gameObject.SetActive(true);
+    }
+
+    private void UpdateHUD()
+    {
+        PlayerController player = PlayerController.Instance;
+        ScoreManager score = ScoreManager.Instance;
+
+        if (scoreText != null && score != null)
+            scoreText.text = $"Score: {score.TotalScore:N0}";
+
+        if (speedText != null && player != null)
+            speedText.text = $"Speed: {player.CurrentSpeed:F1}";
+
+        if (livesText != null && GameManager.Instance != null)
+            livesText.text = $"Lives: {GameManager.Instance.CurrentLives}";
+
+        if (comboText != null && score != null)
+        {
+            comboText.text = score.CurrentCombo > 0 ? $"Combo: {score.CurrentCombo}" : "";
+            if (comboDisplay != null)
+                comboDisplay.SetActive(score.CurrentCombo > 0);
+        }
+
+        if (multiplierText != null && score != null)
+            multiplierText.text = score.CurrentCombo > 0 ? $"x{score.ComboMultiplier:F1}" : "";
     }
 
     public void UpdateLives(int lives)
@@ -216,137 +273,71 @@ public class UIManager : MonoBehaviour
             livesText.text = $"Lives: {lives}";
     }
 
-    public void UpdateHighScore(int highScore)
+    public void ShowNotification(string message)
     {
-        if (highScoreText != null)
-            highScoreText.text = $"HI: {highScore}";
+        if (notificationText != null)
+        {
+            notificationText.text = message;
+            notificationTimer = notificationDuration;
+        }
     }
 
-    public void UpdateCombo(float comboMultiplier)
+    private void UpdateNotifications()
     {
-        if (comboText != null)
+        if (notificationTimer > 0f)
         {
-            if (comboMultiplier > 1)
+            notificationTimer -= Time.deltaTime;
+            if (notificationText != null)
             {
-                comboText.gameObject.SetActive(true);
-                comboText.text = $"x{comboMultiplier:F1}";
-            }
-            else
-            {
-                comboText.gameObject.SetActive(false);
+                Color c = notificationText.color;
+                c.a = Mathf.Clamp01(notificationTimer / notificationDuration);
+                notificationText.color = c;
             }
         }
     }
 
-    public void ShowComboText(string text)
+    public void ShowCombo(int combo, float multiplier)
     {
         if (comboText != null)
-        {
-            comboText.gameObject.SetActive(true);
-            comboText.text = text;
-        }
+            comboText.text = $"COMBO x{combo}!";
+        if (multiplierText != null)
+            multiplierText.text = $"x{multiplier:F1}";
     }
 
-    public void HideComboText()
+    private void OnMasterVolumeChanged(float value)
     {
-        if (comboText != null)
-        {
-            comboText.gameObject.SetActive(false);
-        }
+        AudioManager.Instance?.SetMasterVolume(value);
+        PlayerPrefs.SetFloat("MasterVolume", value);
     }
 
-    public void PlayCrashSound()
+    private void OnMusicVolumeChanged(float value)
     {
-        // Audio handled by AudioManager
+        AudioManager.Instance?.SetMusicVolume(value);
+        PlayerPrefs.SetFloat("MusicVolume", value);
     }
 
-    public void ShowScorePopup(int score, Vector3 worldPosition)
+    private void OnSFXVolumeChanged(float value)
     {
-        Debug.Log($"[UIManager] Score Popup: +{score}");
+        AudioManager.Instance?.SetSFXVolume(value);
+        PlayerPrefs.SetFloat("SFXVolume", value);
     }
 
-    public void ShowScorePopup(string text)
+    private void OnFullscreenToggled(bool isFullscreen)
     {
-        Debug.Log($"[UIManager] Score Popup: {text}");
-        if (comboText != null)
-        {
-            comboText.gameObject.SetActive(true);
-            comboText.text = text;
-        }
+        Screen.fullScreen = isFullscreen;
+        PlayerPrefs.SetInt("Fullscreen", isFullscreen ? 1 : 0);
     }
 
-    public void ShowTrickPopup(string trickName, int bonus)
+    private void OnQualityChanged(int qualityIndex)
     {
-        Debug.Log($"[UIManager] Trick: {trickName} +{bonus}");
-        if (comboText != null)
-        {
-            comboText.gameObject.SetActive(true);
-            comboText.text = $"{trickName} +{bonus}";
-        }
+        QualitySettings.SetQualityLevel(qualityIndex);
+        PlayerPrefs.SetInt("QualityLevel", qualityIndex);
     }
 
-    public void ShowShieldIndicator(bool active)
-    {
-        Debug.Log($"[UIManager] Shield: {(active ? "ON" : "OFF")}");
-    }
-
-    public void ShowPowerUpText(string text)
-    {
-        Debug.Log($"[UIManager] PowerUp: {text}");
-    }
-
-    // ═══════════════════════════════════════════════════════════
-    // HELPER METHODS
-    // ═══════════════════════════════════════════════════════════
-
-    private void ShowMainMenu()
+    public void ShowHUD()
     {
         HideAllCanvases();
-        ShowCanvasByName("MainMenuCanvas");
-    }
-
-    private void HideAllCanvases()
-    {
-        Canvas[] canvases = FindObjectsOfType<Canvas>();
-        foreach (Canvas c in canvases)
-        {
-            c.gameObject.SetActive(false);
-        }
-    }
-
-    private void ShowCanvasByName(string name)
-    {
-        Canvas[] canvases = FindObjectsOfType<Canvas>();
-        foreach (Canvas c in canvases)
-        {
-            if (c.gameObject.name == name)
-            {
-                c.gameObject.SetActive(true);
-                return;
-            }
-        }
-        
-        // Also check parent names
-        foreach (Canvas c in canvases)
-        {
-            if (c.gameObject.name.Contains(name) || name.Contains(c.gameObject.name))
-            {
-                c.gameObject.SetActive(true);
-                return;
-            }
-        }
-    }
-
-    private void HideCanvasByName(string name)
-    {
-        Canvas[] canvases = FindObjectsOfType<Canvas>();
-        foreach (Canvas c in canvases)
-        {
-            if (c.gameObject.name == name)
-            {
-                c.gameObject.SetActive(false);
-                return;
-            }
-        }
+        if (gameHUDCanvas != null)
+            gameHUDCanvas.gameObject.SetActive(true);
     }
 }

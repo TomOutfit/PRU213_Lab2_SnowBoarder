@@ -1,84 +1,69 @@
 using UnityEngine;
+using UnityEngine.SceneManagement;
 
-/// <summary>
-/// Audio manager for handling all game sounds and music.
-/// Manages background music, sound effects, and dynamic audio based on gameplay.
-/// </summary>
 public class AudioManager : MonoBehaviour
 {
     public static AudioManager Instance { get; private set; }
-    
+
     [Header("Audio Sources")]
     [SerializeField] private AudioSource musicSource;
     [SerializeField] private AudioSource sfxSource;
-    [SerializeField] private AudioSource ambientSource;
-    
+
     [Header("Music")]
-    [SerializeField] private AudioClip[] gameplayMusic;
     [SerializeField] private AudioClip menuMusic;
-    [SerializeField] private AudioClip gameOverMusic;
-    
-    [Header("Sound Effects")]
-    [SerializeField] private AudioClip[] jumpSounds;
-    [SerializeField] private AudioClip[] landingSounds;
-    [SerializeField] private AudioClip[] crashSounds;
-    [SerializeField] private AudioClip[] collectSounds;
-    [SerializeField] private AudioClip[] trickSounds;
-    [SerializeField] private AudioClip buttonClickSound;
-    [SerializeField] private AudioClip powerUpSound;
-    
-    [Header("Settings")]
+    [SerializeField] private AudioClip gameplayMusic;
+
+    [Header("SFX")]
+    [SerializeField] private AudioClip crashSFX;
+    [SerializeField] private AudioClip finishSFX;
+    [SerializeField] private AudioClip collectSFX;
+    [SerializeField] private AudioClip powerUpSFX;
+    [SerializeField] private AudioClip menuSelectSFX;
+
+    [Header("Volumes")]
+    [Range(0f, 1f)]
     [SerializeField] private float masterVolume = 1f;
+    [Range(0f, 1f)]
     [SerializeField] private float musicVolume = 0.8f;
+    [Range(0f, 1f)]
     [SerializeField] private float sfxVolume = 1f;
-    [SerializeField] private bool muteOnPause = true;
-    
-    private AudioClip currentMusic;
-    private bool isPlaying;
-    
-    public float MasterVolume
-    {
-        get => masterVolume;
-        set { masterVolume = Mathf.Clamp01(value); UpdateVolumes(); }
-    }
-    
-    public float MusicVolume
-    {
-        get => musicVolume;
-        set { musicVolume = Mathf.Clamp01(value); UpdateVolumes(); }
-    }
-    
-    public float SFXVolume
-    {
-        get => sfxVolume;
-        set { sfxVolume = Mathf.Clamp01(value); UpdateVolumes(); }
-    }
-    
+
+    private float internalMasterVolume = 1f;
+    private float internalMusicVolume = 1f;
+    private float internalSFXVolume = 1f;
+
     private void Awake()
     {
-        if (Instance == null)
-        {
-            Instance = this;
-            DontDestroyOnLoad(gameObject);
-        }
-        else
+        if (Instance != null && Instance != this)
         {
             Destroy(gameObject);
             return;
         }
-        
-        LoadAudioSettings();
-        InitializeAudioSources();
+        Instance = this;
+        DontDestroyOnLoad(gameObject);
+
+        LoadVolumes();
+        SetupAudioSources();
     }
-    
-    private void LoadAudioSettings()
+
+    private void Start()
     {
-        masterVolume = PlayerPrefs.GetFloat("MasterVolume", 1f);
-        musicVolume = PlayerPrefs.GetFloat("MusicVolume", 0.8f);
-        sfxVolume = PlayerPrefs.GetFloat("SFXVolume", 1f);
+        ApplyVolumes();
+        if (menuMusic != null && musicSource != null)
+            PlayMusic(menuMusic);
     }
-    
-    private void InitializeAudioSources()
+
+    private void OnEnable()
+    {
+        SceneManager.sceneLoaded += OnSceneLoaded;
+    }
+
+    private void OnDisable()
+    {
+        SceneManager.sceneLoaded -= OnSceneLoaded;
+    }
+
+    private void SetupAudioSources()
     {
         if (musicSource == null)
         {
@@ -86,261 +71,130 @@ public class AudioManager : MonoBehaviour
             musicSource.loop = true;
             musicSource.playOnAwake = false;
         }
-        
+
         if (sfxSource == null)
         {
             sfxSource = gameObject.AddComponent<AudioSource>();
             sfxSource.loop = false;
             sfxSource.playOnAwake = false;
         }
-        
-        if (ambientSource == null)
-        {
-            ambientSource = gameObject.AddComponent<AudioSource>();
-            ambientSource.loop = true;
-            ambientSource.playOnAwake = false;
-        }
-        
-        UpdateVolumes();
+
+        ApplyVolumes();
     }
-    
-    private void UpdateVolumes()
+
+    private void LoadVolumes()
+    {
+        internalMasterVolume = PlayerPrefs.GetFloat("MasterVolume", 1f);
+        internalMusicVolume = PlayerPrefs.GetFloat("MusicVolume", 0.8f);
+        internalSFXVolume = PlayerPrefs.GetFloat("SFXVolume", 1f);
+    }
+
+    private void ApplyVolumes()
     {
         if (musicSource != null)
-        {
-            musicSource.volume = masterVolume * musicVolume;
-        }
-        
+            musicSource.volume = internalMasterVolume * internalMusicVolume * masterVolume;
         if (sfxSource != null)
-        {
-            sfxSource.volume = masterVolume * sfxVolume;
-        }
-        
-        if (ambientSource != null)
-        {
-            ambientSource.volume = masterVolume * musicVolume * 0.5f;
-        }
+            sfxSource.volume = internalMasterVolume * internalSFXVolume * sfxVolume;
     }
-    
-    #region Music
-    
-    public void PlayGameplayMusic()
+
+    private void OnSceneLoaded(Scene scene, LoadSceneMode mode)
     {
-        if (gameplayMusic != null && gameplayMusic.Length > 0)
+        if (scene.name == "MainMenu")
         {
-            AudioClip clip = gameplayMusic[Random.Range(0, gameplayMusic.Length)];
-            PlayMusic(clip);
+            PlayMusic(menuMusic);
+        }
+        else if (GameManager.Instance?.CurrentState == GameManager.GameState.Playing)
+        {
+            PlayMusic(gameplayMusic);
         }
     }
-    
-    public void PlayMenuMusic()
-    {
-        PlayMusic(menuMusic);
-    }
-    
-    public void PlayGameOverMusic()
-    {
-        PlayMusic(gameOverMusic);
-    }
-    
+
     public void PlayMusic(AudioClip clip)
     {
-        if (clip == null) return;
-        
-        if (musicSource.clip != clip || !musicSource.isPlaying)
-        {
-            musicSource.clip = clip;
-            musicSource.Play();
-            currentMusic = clip;
-        }
+        if (musicSource == null || clip == null) return;
+        if (musicSource.clip == clip && musicSource.isPlaying) return;
+        musicSource.clip = clip;
+        musicSource.Play();
     }
-    
-    public void StopMusic()
-    {
-        musicSource.Stop();
-        currentMusic = null;
-    }
-    
+
     public void PauseMusic()
     {
-        musicSource.Pause();
+        if (musicSource != null)
+            musicSource.Pause();
     }
-    
+
     public void ResumeMusic()
     {
-        musicSource.UnPause();
+        if (musicSource != null)
+            musicSource.UnPause();
     }
-    
-    public void FadeMusic(float duration, float targetVolume = 0f)
+
+    public void StopMusic()
     {
-        StartCoroutine(FadeMusicCoroutine(duration, targetVolume));
-    }
-    
-    private System.Collections.IEnumerator FadeMusicCoroutine(float duration, float targetVolume)
-    {
-        float startVolume = musicSource.volume;
-        float elapsed = 0f;
-        
-        while (elapsed < duration)
-        {
-            elapsed += Time.deltaTime;
-            float t = elapsed / duration;
-            
-            musicSource.volume = Mathf.Lerp(startVolume, targetVolume, t);
-            yield return null;
-        }
-        
-        musicSource.volume = targetVolume;
-        
-        if (targetVolume <= 0f)
-        {
+        if (musicSource != null)
             musicSource.Stop();
-        }
     }
-    
-    #endregion
-    
-    #region Sound Effects
-    
-    public void PlayJumpSound()
+
+    public void PlaySFX(AudioClip clip)
     {
-        if (jumpSounds != null && jumpSounds.Length > 0)
-        {
-            PlaySFX(jumpSounds[Random.Range(0, jumpSounds.Length)]);
-        }
+        if (sfxSource == null || clip == null) return;
+        sfxSource.PlayOneShot(clip, internalMasterVolume * internalSFXVolume);
     }
-    
-    public void PlayLandingSound()
+
+    public void PlayCrashSFX()
     {
-        if (landingSounds != null && landingSounds.Length > 0)
-        {
-            PlaySFX(landingSounds[Random.Range(0, landingSounds.Length)]);
-        }
+        if (crashSFX != null)
+            PlaySFX(crashSFX);
+        else
+            PlaySFX(collectSFX);
     }
-    
-    public void PlayCrashSound()
+
+    public void PlayFinishSFX()
     {
-        if (crashSounds != null && crashSounds.Length > 0)
-        {
-            PlaySFX(crashSounds[Random.Range(0, crashSounds.Length)]);
-        }
+        if (finishSFX != null)
+            PlaySFX(finishSFX);
     }
-    
-    public void PlayCollectSound()
+
+    public void PlayCollectSFX()
     {
-        if (collectSounds != null && collectSounds.Length > 0)
-        {
-            PlaySFX(collectSounds[Random.Range(0, collectSounds.Length)]);
-        }
+        if (collectSFX != null)
+            PlaySFX(collectSFX);
     }
-    
-    public void PlayTrickSound()
+
+    public void PlayPowerUpSFX()
     {
-        if (trickSounds != null && trickSounds.Length > 0)
-        {
-            PlaySFX(trickSounds[Random.Range(0, trickSounds.Length)]);
-        }
+        if (powerUpSFX != null)
+            PlaySFX(powerUpSFX);
     }
-    
-    public void PlayButtonClick()
+
+    public void PlayMenuSelectSFX()
     {
-        PlaySFX(buttonClickSound);
+        if (menuSelectSFX != null)
+            PlaySFX(menuSelectSFX);
     }
-    
-    public void PlayPowerUp()
+
+    public void SetMasterVolume(float volume)
     {
-        PlaySFX(powerUpSound);
+        internalMasterVolume = Mathf.Clamp01(volume);
+        PlayerPrefs.SetFloat("MasterVolume", internalMasterVolume);
+        ApplyVolumes();
     }
-    
-    public void PlaySFX(AudioClip clip, float volumeScale = 1f)
+
+    public void SetMusicVolume(float volume)
     {
-        if (clip != null && sfxSource != null)
-        {
-            sfxSource.PlayOneShot(clip, volumeScale);
-        }
+        internalMusicVolume = Mathf.Clamp01(volume);
+        PlayerPrefs.SetFloat("MusicVolume", internalMusicVolume);
+        ApplyVolumes();
     }
-    
-    public void PlaySFXAtPoint(AudioClip clip, Vector3 position, float volumeScale = 1f)
+
+    public void SetSFXVolume(float volume)
     {
-        if (clip != null)
-        {
-            AudioSource.PlayClipAtPoint(clip, position, masterVolume * sfxVolume * volumeScale);
-        }
+        internalSFXVolume = Mathf.Clamp01(volume);
+        PlayerPrefs.SetFloat("SFXVolume", internalSFXVolume);
+        ApplyVolumes();
     }
-    
-    #endregion
-    
-    #region Ambient
-    
-    public void PlayAmbient(AudioClip clip)
-    {
-        if (ambientSource != null && clip != null)
-        {
-            ambientSource.clip = clip;
-            ambientSource.Play();
-        }
-    }
-    
-    public void StopAmbient()
-    {
-        if (ambientSource != null)
-        {
-            ambientSource.Stop();
-        }
-    }
-    
-    #endregion
-    
-    #region Game State Integration
-    
-    public void OnGameStarted()
-    {
-        PlayGameplayMusic();
-    }
-    
-    public void OnGamePaused()
-    {
-        if (muteOnPause)
-        {
-            PauseMusic();
-        }
-    }
-    
-    public void OnGameResumed()
-    {
-        if (muteOnPause)
-        {
-            ResumeMusic();
-        }
-    }
-    
-    public void OnGameOver()
-    {
-        FadeMusic(1f, 0.5f);
-        Invoke(nameof(PlayGameOverMusic), 1f);
-    }
-    
-    public void OnMainMenu()
-    {
-        FadeMusic(0.5f, 0f);
-        Invoke(nameof(PlayMenuMusic), 0.5f);
-    }
-    
-    #endregion
-    
-    public void SaveAudioSettings()
-    {
-        PlayerPrefs.SetFloat("MasterVolume", masterVolume);
-        PlayerPrefs.SetFloat("MusicVolume", musicVolume);
-        PlayerPrefs.SetFloat("SFXVolume", sfxVolume);
-        PlayerPrefs.Save();
-    }
-    
-    private void OnDestroy()
-    {
-        if (Instance == this)
-        {
-            Instance = null;
-        }
-    }
+
+    public float GetMasterVolume() => internalMasterVolume;
+    public float GetMusicVolume() => internalMusicVolume;
+    public float GetSFXVolume() => internalSFXVolume;
 }

@@ -1,509 +1,252 @@
-using System;
 using UnityEngine;
-using UnityEngine.InputSystem;
+using System;
 
-/// <summary>
-/// Main player controller handling snowboarding physics, movement, and tricks.
-/// Uses Unity's physics engine with custom slope calculations for realistic snowboarding feel.
-/// </summary>
-[RequireComponent(typeof(Rigidbody2D))]
-[RequireComponent(typeof(PlayerInput))]
 public class PlayerController : MonoBehaviour
 {
+    public static PlayerController Instance { get; private set; }
+
     [Header("Movement Settings")]
-    [Tooltip("Maximum horizontal velocity")]
-    [SerializeField] private float maxMoveSpeed = 25f;
-    
-    [Tooltip("How quickly the player accelerates to target velocity")]
-    [SerializeField] private float acceleration = 8f;
-    
-    [Tooltip("How quickly the player decelerates when not pressing keys")]
-    [SerializeField] private float deceleration = 5f;
-    
-    [Header("Gravity & Slope Physics")]
-    [Tooltip("Base gravity strength")]
-    [SerializeField] private float gravity = 25f;
-    
-    [Tooltip("Additional gravity multiplier based on slope angle")]
-    [SerializeField] private float slopeGravityMultiplier = 1.5f;
-    
-    [Tooltip("Friction coefficient on snow")]
-    [SerializeField] private float snowFriction = 0.98f;
-    
-    [Tooltip("Air resistance")]
-    [SerializeField] private float airResistance = 0.995f;
-    
-    [Header("Jump & Tricks")]
-    [Tooltip("Jump force when performing a trick")]
-    [SerializeField] private float jumpForce = 12f;
-    
-    [Tooltip("Time window for landing a trick")]
-    [SerializeField] private float trickWindowTime = 0.5f;
-    
-    [Tooltip("Available trick types")]
-    [SerializeField] private TrickType[] availableTricks;
-    
-    [Header("Speed Control")]
-    [Tooltip("Minimum speed multiplier")]
-    [SerializeField] private float minSpeedMultiplier = 0.5f;
-    
-    [Tooltip("Maximum speed multiplier from power-ups")]
-    [SerializeField] private float maxSpeedMultiplier = 2f;
-    
-    [Tooltip("Speed change rate when using speed control")]
-    [SerializeField] private float speedChangeRate = 0.5f;
-    
-    [Header("Ground Detection")]
-    [Tooltip("Layer mask for ground detection")]
-    [SerializeField] private LayerMask groundLayer;
-    
-    [Tooltip("Distance to check for ground")]
-    [SerializeField] private float groundCheckDistance = 0.5f;
-    
-    [Header("Effects")]
-    [Tooltip("Trail renderer for snow spray")]
-    [SerializeField] private TrailRenderer snowTrail;
-    
-    [Tooltip("Particle system for landing impact")]
-    [SerializeField] private ParticleSystem landingParticles;
-    
-    [Header("Animation")]
-    [Tooltip("Animator for player sprite")]
-    [SerializeField] private Animator playerAnimator;
-    
-    [Tooltip("Sprite renderer for flipping")]
-    [SerializeField] private SpriteRenderer spriteRenderer;
-    
-    // Components
-    private Rigidbody2D rb;
-    private PlayerInput playerInput;
-    private Collider2D playerCollider;
-    
-    // State
+    [SerializeField] private float baseSpeed = 8f;
+    [SerializeField] private float maxSpeed = 20f;
+    [SerializeField] private float acceleration = 5f;
+    [SerializeField] private float deceleration = 3f;
+    [SerializeField] private float turnSpeed = 5f;
+    [SerializeField] private float laneWidth = 3f;
+
+    [Header("Slope Physics")]
+    [SerializeField] private float gravityMultiplier = 1.5f;
+    [SerializeField] private float slopeSpeedBoost = 0.5f;
+    [SerializeField] private float friction = 0.1f;
+    [SerializeField] private float slopeAngle = 15f;
+
+    [Header("Trick System")]
+    [SerializeField] private float trickCooldown = 0.5f;
+    [SerializeField] private int maxComboTricks = 5;
+
+    [Header("Invincibility")]
+    [SerializeField] private float invincibilityDuration = 3f;
+    [SerializeField] private float invincibilityBlinkInterval = 0.15f;
+
+    [Header("References")]
+    [SerializeField] private Rigidbody2D rb;
+    [SerializeField] private SpriteRenderer playerSprite;
+    [SerializeField] private AudioSource audioSource;
+
+    public float CurrentSpeed { get; private set; }
+    public bool IsGrounded { get; private set; } = true;
+    public bool IsInvincible { get; private set; }
+    public bool IsPerformingTrick { get; private set; }
+    public int CurrentCombo { get; private set; }
+
     private Vector2 moveInput;
-    private Vector2 currentVelocity;
-    private float currentSpeedMultiplier = 1f;
-    private bool isGrounded;
-    private bool isGroundedPrevious;
-    private bool isJumping;
-    private bool canTrick;
-    private float trickTimer;
-    private TrickType currentTrick;
-    private bool isSpeedBoostActive;
-    private bool isInvincible;
-    private float invincibleTimer;
-    
-    // Slope tracking
-    private float currentSlopeAngle;
-    private Vector2 currentSlopeDirection;
-    private float lastGroundedTime;
-    
-    // Events
-    public event Action OnJump;
-    public event Action OnLand;
-    public event Action<TrickType> OnTrickPerformed;
+    private Vector2 smoothInput;
+    private float currentTrickCooldown;
+    private float invincibilityTimer;
+    private float blinkTimer;
+    private bool spriteVisible = true;
+    private float xPosition;
+
+    private const string HORIZONTAL = "Horizontal";
+    private const string VERTICAL = "Vertical";
+
+    public event Action OnSpeedChanged;
+    public event Action<int> OnComboChanged;
+    public event Action OnTrickPerformed;
     public event Action OnCrash;
-    public event Action<float> OnSpeedChanged;
-    
-    // Properties
-    public bool IsGrounded => isGrounded;
-    public bool IsJumping => isJumping;
-    public float CurrentSpeed => rb.linearVelocity.magnitude;
-    public float CurrentSpeedMultiplier => currentSpeedMultiplier;
-    public bool IsInvincible => isInvincible;
-    public float CurrentSlopeAngle => currentSlopeAngle;
-    public Vector2 Velocity => rb.linearVelocity;
-    
+
+    public void OnMoveInput(Vector2 input)
+    {
+        moveInput = input;
+    }
+
+    public void OnJumpInput()
+    {
+        if (GameManager.Instance == null || GameManager.Instance.CurrentState != GameManager.GameState.Playing) return;
+        if (currentTrickCooldown > 0 || !IsGrounded || CurrentCombo >= maxComboTricks) return;
+        PerformTrick("Jump");
+    }
+
     private void Awake()
     {
-        rb = GetComponent<Rigidbody2D>();
-        playerInput = GetComponent<PlayerInput>();
-        playerCollider = GetComponent<Collider2D>();
-        
-        SetupRigidbody();
+        Instance = this;
+        if (rb == null) rb = GetComponent<Rigidbody2D>();
+        if (playerSprite == null) playerSprite = GetComponent<SpriteRenderer>();
+        if (audioSource == null) audioSource = GetComponent<AudioSource>();
     }
-    
-    private void SetupRigidbody()
-    {
-        rb.gravityScale = 0f;
-        rb.freezeRotation = true;
-        rb.interpolation = RigidbodyInterpolation2D.Interpolate;
-        rb.collisionDetectionMode = CollisionDetectionMode2D.Continuous;
-    }
-    
+
     private void Update()
     {
-        UpdateGroundCheck();
-        UpdateTrickWindow();
-        UpdateInvincibility();
-        UpdateAnimator();
-        UpdateEffects();
-    }
-    
-    private void FixedUpdate()
-    {
-        ApplyCustomGravity();
-        HandleHorizontalMovement();
-        ApplyFriction();
-        ClampVelocity();
-    }
-    
-    private void UpdateGroundCheck()
-    {
-        isGroundedPrevious = isGrounded;
-        
-        Vector2 checkOrigin = playerCollider.bounds.center;
-        Vector2 checkDirection = Vector2.down;
-        
-        float checkDistance = groundCheckDistance;
-        
-        if (Physics2D.Raycast(checkOrigin, checkDirection, checkDistance, groundLayer))
-        {
-            if (!isGrounded)
-            {
-                OnLanding();
-            }
-            isGrounded = true;
-            lastGroundedTime = Time.time;
-            canTrick = true;
-        }
-        else
-        {
-            if (isGrounded && !isGroundedPrevious)
-            {
-                if (!isJumping)
-                {
-                    OnCrash?.Invoke();
-                }
-            }
-            isGrounded = false;
-        }
-    }
-    
-    private void OnLanding()
-    {
-        if (isJumping)
-        {
-            if (trickTimer > 0)
-            {
-                PerformTrick(currentTrick);
-            }
-            else
-            {
-                OnLand?.Invoke();
-            }
-            
-            landingParticles?.Play();
-        }
-        
-        isJumping = false;
-        transform.rotation = Quaternion.identity;
-    }
-    
-    private void ApplyCustomGravity()
-    {
-        Vector2 gravityForce = Vector2.down * gravity;
-        
-        if (!isGrounded)
-        {
-            rb.AddForce(gravityForce);
-            
-            if (Physics2D.Raycast(transform.position, Vector2.down, groundCheckDistance * 2f, groundLayer))
-            {
-                rb.AddForce(gravityForce * slopeGravityMultiplier);
-            }
-        }
-        else
-        {
-            RaycastHit2D hit = Physics2D.Raycast(transform.position, Vector2.down, groundCheckDistance * 2f, groundLayer);
-            if (hit.collider != null)
-            {
-                Vector2 surfaceNormal = hit.normal;
-                currentSlopeAngle = Vector2.Angle(surfaceNormal, Vector2.up);
-                currentSlopeDirection = Vector2.Perpendicular(surfaceNormal).normalized;
-                
-                float slopeGravity = gravity * Mathf.Sin(currentSlopeAngle * Mathf.Deg2Rad);
-                rb.AddForce(new Vector2(currentSlopeDirection.x, -1) * slopeGravity);
-            }
-        }
-    }
-    
-    private void HandleHorizontalMovement()
-    {
-        float targetVelocityX = moveInput.x * maxMoveSpeed * currentSpeedMultiplier;
-        
-        if (isGrounded)
-        {
-            float currentVelocityX = rb.linearVelocity.x;
-            float velocityDiff = targetVelocityX - currentVelocityX;
-            
-            if (moveInput.x != 0f)
-            {
-                float accelerationForce = acceleration * Mathf.Sign(velocityDiff);
-                accelerationForce = Mathf.Clamp(accelerationForce, -Mathf.Abs(velocityDiff) / Time.fixedDeltaTime, Mathf.Abs(velocityDiff) / Time.fixedDeltaTime);
-                
-                rb.AddForce(Vector2.right * accelerationForce);
-            }
-            else
-            {
-                rb.AddForce(Vector2.right * -currentVelocityX * deceleration);
-            }
-        }
-        else
-        {
-            rb.AddForce(Vector2.right * moveInput.x * acceleration * 0.3f);
-        }
-    }
-    
-    private void ApplyFriction()
-    {
-        if (isGrounded)
-        {
-            rb.linearVelocity *= snowFriction;
-        }
-        else
-        {
-            rb.linearVelocity *= airResistance;
-        }
-    }
-    
-    private void ClampVelocity()
-    {
-        float maxSpeed = maxMoveSpeed * currentSpeedMultiplier;
-        if (rb.linearVelocity.magnitude > maxSpeed)
-        {
-            rb.linearVelocity = rb.linearVelocity.normalized * maxSpeed;
-        }
-        
-        float minSpeed = maxMoveSpeed * minSpeedMultiplier;
-        if (isGrounded && rb.linearVelocity.magnitude < minSpeed && moveInput.x == 0)
-        {
-            // Maintain minimum speed on slopes
-        }
-    }
-    
-    private void UpdateTrickWindow()
-    {
-        if (!isGrounded && !isJumping)
-        {
-            return;
-        }
-        
-        if (isGrounded && canTrick)
-        {
-            trickTimer = trickWindowTime;
-            canTrick = false;
-        }
-        
-        if (trickTimer > 0f)
-        {
-            trickTimer -= Time.deltaTime;
-        }
-    }
-    
-    private void UpdateInvincibility()
-    {
-        if (isInvincible)
-        {
-            invincibleTimer -= Time.deltaTime;
-            if (invincibleTimer <= 0f)
-            {
-                isInvincible = false;
-            }
-        }
-    }
-    
-    private void UpdateAnimator()
-    {
-        if (playerAnimator != null)
-        {
-            playerAnimator.SetFloat("Speed", Mathf.Abs(rb.linearVelocity.x));
-            playerAnimator.SetFloat("VerticalVelocity", rb.linearVelocity.y);
-            playerAnimator.SetBool("IsGrounded", isGrounded);
-            playerAnimator.SetBool("IsJumping", isJumping);
-        }
-        
-        if (spriteRenderer != null && moveInput.x != 0f)
-        {
-            spriteRenderer.flipX = moveInput.x < 0f;
-        }
-    }
-    
-    private void UpdateEffects()
-    {
-        if (snowTrail != null)
-        {
-            snowTrail.emitting = isGrounded && Mathf.Abs(rb.linearVelocity.x) > 5f;
-        }
-    }
-    
-    #region Input Handling
-    
-    public void OnMove(InputAction.CallbackContext context)
-    {
-        moveInput = context.ReadValue<Vector2>();
-    }
-    
-    public void HandleJumpInput(InputAction.CallbackContext context)
-    {
-        if (context.performed && isGrounded && !isJumping)
-        {
-            Jump();
-        }
-    }
-    
-    public void OnTrickLeft(InputAction.CallbackContext context)
-    {
-        if (context.performed && !isGrounded && canTrick)
-        {
-            StartTrick(TrickType.Backflip);
-        }
-    }
-    
-    public void OnTrickRight(InputAction.CallbackContext context)
-    {
-        if (context.performed && !isGrounded && canTrick)
-        {
-            StartTrick(TrickType.Frontflip);
-        }
-    }
-    
-    public void OnSpeedUp(InputAction.CallbackContext context)
-    {
-        if (context.performed && !isSpeedBoostActive)
-        {
-            isSpeedBoostActive = true;
-            currentSpeedMultiplier = Mathf.Clamp(currentSpeedMultiplier + speedChangeRate, minSpeedMultiplier, maxSpeedMultiplier);
-            OnSpeedChanged?.Invoke(currentSpeedMultiplier);
-        }
-        else if (context.canceled)
-        {
-            isSpeedBoostActive = false;
-        }
-    }
-    
-    public void OnSpeedDown(InputAction.CallbackContext context)
-    {
-        if (context.performed && !isSpeedBoostActive)
-        {
-            isSpeedBoostActive = true;
-            currentSpeedMultiplier = Mathf.Clamp(currentSpeedMultiplier - speedChangeRate, minSpeedMultiplier, maxSpeedMultiplier);
-            OnSpeedChanged?.Invoke(currentSpeedMultiplier);
-        }
-        else if (context.canceled)
-        {
-            isSpeedBoostActive = false;
-        }
-    }
-    
-    #endregion
-    
-    #region Movement Actions
-    
-    private void Jump()
-    {
-        isJumping = true;
-        canTrick = true;
-        trickTimer = trickWindowTime;
-        
-        rb.linearVelocity = new Vector2(rb.linearVelocity.x, 0);
-        rb.AddForce(Vector2.up * jumpForce, ForceMode2D.Impulse);
-        
-        OnJump?.Invoke();
-    }
-    
-    private void StartTrick(TrickType trick)
-    {
-        currentTrick = trick;
-        canTrick = false;
-    }
-    
-    private void PerformTrick(TrickType trick)
-    {
-        OnTrickPerformed?.Invoke(trick);
-        isJumping = false;
-    }
-    
-    #endregion
-    
-    #region Public Methods
-    
-    public void ApplySpeedBoost(float multiplier, float duration)
-    {
-        currentSpeedMultiplier = Mathf.Clamp(multiplier, minSpeedMultiplier, maxSpeedMultiplier);
-        OnSpeedChanged?.Invoke(currentSpeedMultiplier);
-        
-        Invoke(nameof(ResetSpeedBoost), duration);
-    }
-    
-    private void ResetSpeedBoost()
-    {
-        currentSpeedMultiplier = 1f;
-        OnSpeedChanged?.Invoke(currentSpeedMultiplier);
-    }
-    
-    public void SetInvincible(float duration)
-    {
-        isInvincible = true;
-        invincibleTimer = duration;
-    }
-    
-    public void HandleCollision(Collision2D collision)
-    {
-        if (isInvincible)
-        {
-            return;
-        }
-        
-        if (collision.gameObject.CompareTag("Obstacle"))
-        {
-            float impactForce = collision.relativeVelocity.magnitude;
-            
-            if (impactForce > 10f)
-            {
-                OnCrash?.Invoke();
-            }
-            else
-            {
-                Vector2 reflectDirection = Vector2.Reflect(rb.linearVelocity, collision.GetContact(0).normal);
-                rb.linearVelocity = reflectDirection * 0.5f;
-            }
-        }
-    }
-    
-    public void TriggerCrash()
-    {
-        if (!isInvincible)
-        {
-            OnCrash?.Invoke();
-        }
-    }
-    
-    public void AddExternalForce(Vector2 force)
-    {
-        rb.AddForce(force, ForceMode2D.Impulse);
-    }
-    
-    #endregion
-    
-    private void OnDrawGizmos()
-    {
-        if (!Application.isPlaying)
-        {
-            return;
-        }
-        
-        Gizmos.color = Color.green;
-        Gizmos.DrawLine(transform.position, transform.position + Vector3.down * groundCheckDistance);
-    }
-}
+        if (GameManager.Instance == null || GameManager.Instance.CurrentState != GameManager.GameState.Playing) return;
 
-[System.Serializable]
-public enum TrickType
-{
-    None,
-    Backflip,
-    Frontflip,
-    Grab,
-    Spin180
+        ReadInput();
+        HandleTrickCooldown();
+        HandleInvincibility();
+        UpdateSpritePosition();
+        ApplySlopePhysics();
+        ApplyMovement();
+        ClampSpeed();
+    }
+
+    private void ReadInput()
+    {
+        smoothInput = Vector2.Lerp(smoothInput, moveInput, Time.deltaTime * 10f);
+    }
+
+    private void HandleTrickCooldown()
+    {
+        if (currentTrickCooldown > 0)
+            currentTrickCooldown -= Time.deltaTime;
+    }
+
+    private void HandleInvincibility()
+    {
+        if (!IsInvincible) return;
+
+        invincibilityTimer -= Time.deltaTime;
+        blinkTimer -= Time.deltaTime;
+
+        if (blinkTimer <= 0f)
+        {
+            spriteVisible = !spriteVisible;
+            playerSprite.enabled = spriteVisible;
+            blinkTimer = invincibilityBlinkInterval;
+        }
+
+        if (invincibilityTimer <= 0f)
+        {
+            IsInvincible = false;
+            playerSprite.enabled = true;
+        }
+    }
+
+    private void UpdateSpritePosition()
+    {
+        xPosition += smoothInput.x * turnSpeed * Time.deltaTime;
+        xPosition = Mathf.Clamp(xPosition, -laneWidth, laneWidth);
+        transform.position = new Vector3(xPosition, transform.position.y, 0f);
+    }
+
+    private void ApplySlopePhysics()
+    {
+        float slopeFactor = Mathf.Sin(Mathf.Deg2Rad * slopeAngle) * gravityMultiplier * slopeSpeedBoost;
+        float slopeBonus = baseSpeed * slopeFactor;
+
+        float targetSpeed = baseSpeed + slopeBonus + (smoothInput.y < 0 ? acceleration : 0f);
+        targetSpeed = Mathf.Clamp(targetSpeed, 0f, maxSpeed);
+
+        float speedDelta = smoothInput.y < 0 ? acceleration : deceleration;
+        CurrentSpeed = Mathf.MoveTowards(CurrentSpeed, targetSpeed, speedDelta * Time.deltaTime);
+
+        float frictionEffect = friction * Time.deltaTime;
+        CurrentSpeed = Mathf.Max(0f, CurrentSpeed - frictionEffect);
+
+        OnSpeedChanged?.Invoke();
+    }
+
+    private void ApplyMovement()
+    {
+        Vector2 velocity = rb.linearVelocity;
+        velocity.y = -CurrentSpeed;
+        velocity.x = smoothInput.x * turnSpeed * 0.5f;
+        rb.linearVelocity = velocity;
+    }
+
+    private void ClampSpeed()
+    {
+        if (CurrentSpeed > maxSpeed)
+            CurrentSpeed = maxSpeed;
+    }
+
+    public void PerformTrick(string trickName)
+    {
+        if (currentTrickCooldown > 0 || !IsGrounded || CurrentCombo >= maxComboTricks) return;
+
+        currentTrickCooldown = trickCooldown;
+        IsPerformingTrick = true;
+        CurrentCombo++;
+
+        float trickScore = CalculateTrickScore(trickName);
+        ScoreManager.Instance.AddTrickScore(trickName, CurrentCombo, trickScore);
+
+        OnTrickPerformed?.Invoke();
+        OnComboChanged?.Invoke(CurrentCombo);
+
+        Invoke(nameof(EndTrick), 0.3f);
+    }
+
+    private float CalculateTrickScore(string trickName)
+    {
+        float baseScore = 100f;
+        float comboMultiplier = 1f + (CurrentCombo - 1) * 0.5f;
+
+        return trickName switch
+        {
+            "Jump" => baseScore * 1f * comboMultiplier,
+            "Spin" => baseScore * 1.5f * comboMultiplier,
+            "Flip" => baseScore * 2f * comboMultiplier,
+            _ => baseScore * comboMultiplier
+        };
+    }
+
+    private void EndTrick()
+    {
+        IsPerformingTrick = false;
+    }
+
+    public void BreakCombo()
+    {
+        if (!IsPerformingTrick)
+            CurrentCombo = 0;
+        OnComboChanged?.Invoke(CurrentCombo);
+    }
+
+    public void TakeDamage(int damageAmount)
+    {
+        if (IsInvincible) return;
+
+        if (GameManager.Instance == null) return;
+        GameManager.Instance.PlayerDied();
+        AudioManager.Instance?.PlayCrashSFX();
+        OnCrash?.Invoke();
+        ApplyInvincibility();
+    }
+
+    public void ApplySpeedBoost(float boostAmount, float duration)
+    {
+        StartCoroutine(SpeedBoostCoroutine(boostAmount, duration));
+    }
+
+    private System.Collections.IEnumerator SpeedBoostCoroutine(float boostAmount, float duration)
+    {
+        float originalMaxSpeed = maxSpeed;
+        maxSpeed += boostAmount;
+        yield return new WaitForSeconds(duration);
+        maxSpeed = originalMaxSpeed;
+    }
+
+    public void ApplyInvincibility()
+    {
+        IsInvincible = true;
+        invincibilityTimer = invincibilityDuration;
+        blinkTimer = invincibilityBlinkInterval;
+        playerSprite.enabled = true;
+    }
+
+    public void ResetComboOnCrash()
+    {
+        CurrentCombo = 0;
+        OnComboChanged?.Invoke(0);
+    }
+
+    private void OnCollisionEnter2D(Collision2D collision)
+    {
+        if (collision.gameObject.CompareTag("Ground"))
+            IsGrounded = true;
+    }
+
+    private void OnCollisionExit2D(Collision2D collision)
+    {
+        if (collision.gameObject.CompareTag("Ground"))
+            IsGrounded = false;
+    }
 }
