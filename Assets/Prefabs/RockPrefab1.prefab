@@ -11,7 +11,6 @@ GameObject:
   - component: {fileID: 397535980732031657}
   - component: {fileID: 4618906606952088271}
   - component: {fileID: 7030132725259999110}
-  - component: {fileID: 7589881590679685383}
   m_Layer: 0
   m_Name: RockPrefab1
   m_TagString: Obstacle
@@ -165,25 +164,3 @@ PolygonCollider2D:
       - {x: 0.78, y: -0.63}
       - {x: 0.88, y: -0.61}
   m_UseDelaunayMesh: 1
---- !u!114 &7589881590679685383
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 4442563849953333245}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 965731fb3de9b9544b01dde9319039ff, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::ObstacleController
-  obstacleType: 0
-  damage: 1
-  speedPenalty: 0.3
-  indestructible: 1
-  health: 1
-  destructionPoints: 50
-  visualRenderer: {fileID: 0}
-  destructionParticles: {fileID: 0}
-  hitSound: {fileID: 0}
-  destructionSound: {fileID: 0}

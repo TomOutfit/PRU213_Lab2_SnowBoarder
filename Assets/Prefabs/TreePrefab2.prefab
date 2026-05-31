@@ -11,7 +11,6 @@ GameObject:
   - component: {fileID: 7704235687308138763}
   - component: {fileID: 976752203790232453}
   - component: {fileID: 8152919653194930644}
-  - component: {fileID: 9185318771750789544}
   m_Layer: 0
   m_Name: TreePrefab2
   m_TagString: Obstacle
@@ -384,25 +383,3 @@ PolygonCollider2D:
       - {x: 10.35, y: 1.65}
       - {x: 10.1, y: 1.65}
   m_UseDelaunayMesh: 1
---- !u!114 &9185318771750789544
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 8872977018981364948}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 965731fb3de9b9544b01dde9319039ff, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::ObstacleController
-  obstacleType: 1
-  damage: 1
-  speedPenalty: 0.3
-  indestructible: 1
-  health: 1
-  destructionPoints: 50
-  visualRenderer: {fileID: 0}
-  destructionParticles: {fileID: 0}
-  hitSound: {fileID: 0}
-  destructionSound: {fileID: 0}
