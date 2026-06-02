@@ -1765,32 +1765,44 @@ MonoBehaviour:
   optionsButton: {fileID: 0}
   guideButton: {fileID: 624952417}
   quitButton: {fileID: 1438541127}
-  scoreText: {fileID: 0}
-  speedText: {fileID: 0}
-  timerText: {fileID: 0}
-  livesText: {fileID: 0}
-  comboText: {fileID: 0}
-  multiplierText: {fileID: 0}
-  livesIcon: {fileID: 0}
-  comboDisplay: {fileID: 0}
-  gameOverScoreText: {fileID: 0}
   restartButton: {fileID: 0}
   menuButton: {fileID: 0}
-  finalScoreText: {fileID: 0}
-  timeBonusText: {fileID: 0}
   nextLevelButton: {fileID: 0}
   replayButton: {fileID: 0}
   completeMenuButton: {fileID: 0}
   resumeButton: {fileID: 0}
   pauseRestartButton: {fileID: 0}
   pauseMenuButton: {fileID: 0}
+  optionsBackButton: {fileID: 0}
+  scoreText: {fileID: 0}
+  speedText: {fileID: 0}
+  timerText: {fileID: 0}
+  livesText: {fileID: 0}
+  comboText: {fileID: 0}
+  multiplierText: {fileID: 0}
+  gameOverScoreText: {fileID: 0}
+  gameOverTimeText: {fileID: 0}
+  gameOverDistanceText: {fileID: 0}
+  gameOverSpeedText: {fileID: 0}
+  completeScoreText: {fileID: 0}
+  completeTimeText: {fileID: 0}
+  completeDistanceText: {fileID: 0}
+  completeSpeedText: {fileID: 0}
+  finalScoreText: {fileID: 0}
+  timeBonusText: {fileID: 0}
+  notificationText: {fileID: 0}
+  distanceText: {fileID: 0}
+  livesIcon: {fileID: 0}
+  comboDisplay: {fileID: 0}
+  gameOverPanel: {fileID: 0}
+  pausePanel: {fileID: 0}
+  levelCompletePanel: {fileID: 0}
   masterVolumeSlider: {fileID: 0}
   musicVolumeSlider: {fileID: 0}
   sfxVolumeSlider: {fileID: 0}
   fullscreenToggle: {fileID: 0}
   qualityDropdown: {fileID: 0}
-  optionsBackButton: {fileID: 0}
-  notificationText: {fileID: 0}
+  floatingTextPrefab: {fileID: 0}
   notificationDuration: 2
   fadeCanvasGroup: {fileID: 0}
 --- !u!114 &1902478731
@@ -1805,9 +1817,15 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: f6f9fbbe7af681741b8a2d9a01c1f9c3, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::AudioManager
-  musicSource: {fileID: 0}
+  bgmSource: {fileID: 0}
   sfxSource: {fileID: 0}
-  menuMusic: {fileID: 8300000, guid: 93ba3b9acb8c88b47af4562f0e7a013a, type: 3}
+  boardingSource: {fileID: 0}
+  jumpClip: {fileID: 0}
+  crashClip: {fileID: 0}
+  collectClip: {fileID: 0}
+  trickClip: {fileID: 0}
+  musicSource: {fileID: 0}
+  menuMusicClip: {fileID: 0}
   gameplayMusic: {fileID: 8300000, guid: 47368ef8b8e8ec947a177175c0a3f572, type: 3}
   crashSFX: {fileID: 8300000, guid: 6a53531be5bb01741b71167414c12a17, type: 3}
   finishSFX: {fileID: 8300000, guid: b71ce8f14699ac44e914948bd8f2c239, type: 3}
@@ -1828,12 +1846,17 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: efe1d287a94431b478a17f22e7e3089d, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::ScoreManager
+  scoreTextHUD: {fileID: 0}
   pointsPerSecond: 10
   speedBonusThreshold: 15
   speedBonusMultiplier: 2
   maxComboTimer: 3
+  comboResetTime: 3
   maxCombo: 10
   comboMultiplierGrowth: 0.5
+  scoreTextMenu: {fileID: 0}
+  comboTextMenu: {fileID: 0}
+  multiplierTextMenu: {fileID: 0}
 --- !u!114 &1902478733
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -2211,7 +2234,7 @@ MonoBehaviour:
 
     - Reach the finish line!'
   m_isRightToLeft: 0
-  m_fontAsset: {fileID: 11400000, guid: 574f8c819d12c3148ad9d190445cedd1, type: 2}
+  m_fontAsset: {fileID: 11400000, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
   m_sharedMaterial: {fileID: 3387489023945274930, guid: 574f8c819d12c3148ad9d190445cedd1, type: 2}
   m_fontSharedMaterials: []
   m_fontMaterial: {fileID: 0}
@@ -2236,13 +2259,13 @@ MonoBehaviour:
   m_faceColor:
     serializedVersion: 2
     rgba: 4294967295
-  m_fontSize: 15
-  m_fontSizeBase: 15
+  m_fontSize: 36
+  m_fontSizeBase: 36
   m_fontWeight: 400
   m_enableAutoSizing: 0
   m_fontSizeMin: 0
   m_fontSizeMax: 0
-  m_fontStyle: 0
+  m_fontStyle: 1
   m_HorizontalAlignment: 2
   m_VerticalAlignment: 512
   m_textAlignment: 65535
@@ -2278,7 +2301,7 @@ MonoBehaviour:
   m_margin: {x: 0, y: 0, z: 0, w: 0}
   m_isUsingLegacyAnimationComponent: 0
   m_isVolumetricText: 0
-  m_hasFontAssetChanged: 0
+  m_hasFontAssetChanged: 1
   m_baseMaterial: {fileID: 0}
   m_maskOffset: {x: 0, y: 0, z: 0, w: 0}
 --- !u!222 &2030832087
