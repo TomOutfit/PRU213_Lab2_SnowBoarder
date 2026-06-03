@@ -4,14 +4,21 @@ public class ItemCollectible : MonoBehaviour
 {
     public enum ItemType
     {
-        Snowflake,
-        SpeedBoost,
-        Invincibility
+        SmallSnowflake = 0,
+        IceCoin = 1,
+        GoldenSnowflake = 2,
+        Trophy = 3,
+        IceDiamond = 4,
+        EnergyDrink = 5,
+        IceShield = 6,
+        MultiplierStar = 7
     }
 
-    public ItemType itemType;
-    public int scoreValue = 100;
-    [SerializeField] float effectDuration = 3f;
+    [Header("Item Configuration")]
+    public ItemType type;
+    public int points;
+
+    [SerializeField] float effectDuration = 4f;
     [SerializeField] ParticleSystem collectEffect;
 
     void OnTriggerEnter2D(Collider2D other)
@@ -28,28 +35,54 @@ public class ItemCollectible : MonoBehaviour
 
     void CollectItem(PlayerController player)
     {
-        if (AudioManager.Instance != null) AudioManager.Instance.PlayCollectSound();
+        // 1. Phát âm thanh tương ứng với loại vật phẩm
+        if (AudioManager.Instance != null)
+        {
+            if (type == ItemType.SmallSnowflake || type == ItemType.IceCoin || type == ItemType.GoldenSnowflake)
+            {
+                AudioManager.Instance.PlayCollectSound(); // Âm thanh nhặt nhỏ
+            }
+            else
+            {
+                AudioManager.Instance.PlayTrickSuccessSound(); // Âm thanh power-up / vật phẩm lớn
+            }
+        }
 
+        // 2. Hiệu ứng hạt (Particle)
         if (collectEffect != null)
         {
             ParticleSystem effect = Instantiate(collectEffect, transform.position, Quaternion.identity);
-            Destroy(effect.gameObject, 2f); // Xoá hiệu ứng sau 2 giây
+            Destroy(effect.gameObject, 2f);
         }
 
-        switch (itemType)
+        // 3. Cộng điểm số
+        if (ScoreManager.Instance != null && points > 0)
         {
-            case ItemType.Snowflake:
-                if (ScoreManager.Instance != null) ScoreManager.Instance.AddScore(scoreValue);
-                if (UIManager.Instance != null) UIManager.Instance.ShowFloatingText("+" + scoreValue, transform.position);
-                break;
-            case ItemType.SpeedBoost:
+            ScoreManager.Instance.AddScore(points);
+            if (UIManager.Instance != null)
+            {
+                UIManager.Instance.ShowFloatingText("+" + points, transform.position);
+            }
+        }
+
+        // 4. Áp dụng hiệu ứng Gameplay
+        switch (type)
+        {
+            case ItemType.EnergyDrink:
                 player.ApplySpeedBoost(effectDuration);
                 break;
-            case ItemType.Invincibility:
+            case ItemType.IceShield:
                 player.ApplyInvincibility(effectDuration);
+                break;
+            case ItemType.MultiplierStar:
+                if (ScoreManager.Instance != null)
+                {
+                    ScoreManager.Instance.IncrementComboMultiplier();
+                }
                 break;
         }
 
+        // 5. Huỷ vật phẩm sau khi nhặt
         Destroy(gameObject);
     }
 }

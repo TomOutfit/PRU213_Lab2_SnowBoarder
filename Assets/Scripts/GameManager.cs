@@ -9,39 +9,201 @@ public class GameManager : MonoBehaviour
     public GameState State { get; private set; }
 
     [Header("Game Settings")]
-    public int startingLives = 3;
-    public string firstLevelScene = "Level1";
+    public int startingLives = 1;
+    public string level1Scene = "Level1";
     public string level2Scene = "Level2";
+    public string level3Scene = "Level3";
     public string endScreenScene = "Winner";
     public float restartDelay = 2f;
 
     public int Lives { get; private set; }
 
+    CanvasGroup fadeGroup;
+
     void Awake()
     {
+        // Thiết lập đồng bộ khung hình VSync và giới hạn FPS để tốc độ game luôn mượt mà và ổn định
+        QualitySettings.vSyncCount = 1;
+        Application.targetFrameRate = 60;
+
         if (Instance == null)
         {
             Instance = this;
             transform.SetParent(null);
             DontDestroyOnLoad(gameObject);
+            CreateFadeCanvas();
+
+            if (AudioManager.Instance == null)
+            {
+                GameObject audioManagerGO = new GameObject("AudioManager");
+                audioManagerGO.AddComponent<AudioManager>();
+            }
         }
         else
         {
+            // Relink Menu buttons to the persistent Instance before destroying the duplicate
+            if (UnityEngine.SceneManagement.SceneManager.GetActiveScene().name == "Menu")
+            {
+                Instance.BindMenuButtons();
+            }
             Destroy(gameObject);
             return;
+        }
+    }
+
+    public void BindMenuButtons()
+    {
+        UnityEngine.UI.Button[] btns = Object.FindObjectsByType<UnityEngine.UI.Button>(FindObjectsInactive.Include);
+        foreach (var btn in btns)
+        {
+            if (btn.name.ToLower().Contains("play") || btn.name.ToLower().Contains("start"))
+            {
+                btn.onClick.RemoveAllListeners();
+                btn.onClick.AddListener(() => StartGame());
+            }
+            else if (btn.name.ToLower().Contains("quit") || btn.name.ToLower().Contains("exit"))
+            {
+                btn.onClick.RemoveAllListeners();
+                btn.onClick.AddListener(() => QuitGame());
+            }
+            else if (btn.name.ToLower().Contains("guide"))
+            {
+                btn.onClick.RemoveAllListeners();
+                btn.onClick.AddListener(() => ShowGuide(true));
+            }
+            else if (btn.name.ToLower().Contains("back") || btn.name.ToLower().Contains("close"))
+            {
+                btn.onClick.RemoveAllListeners();
+                btn.onClick.AddListener(() => ShowGuide(false));
+            }
+        }
+    }
+
+    public void ShowGuide(bool show)
+    {
+        Canvas[] canvases = Object.FindObjectsByType<Canvas>(FindObjectsInactive.Include);
+        Canvas mainCanvas = null;
+
+        foreach (var c in canvases)
+        {
+            if (c.name.ToLower().Contains("menu") || c.name.ToLower() == "canvas")
+            {
+                mainCanvas = c;
+                break;
+            }
+        }
+
+        if (mainCanvas != null)
+        {
+            for (int i = 0; i < mainCanvas.transform.childCount; i++)
+            {
+                Transform child = mainCanvas.transform.GetChild(i);
+                string childName = child.name.ToLower();
+
+                if (childName == "guidecanva" || (childName.Contains("guide") && !childName.Contains("button")))
+                {
+                    child.gameObject.SetActive(show);
+                }
+                else if (childName.Contains("button") || childName.Contains("title"))
+                {
+                    child.gameObject.SetActive(!show);
+                }
+            }
         }
     }
 
     void Start()
     {
         Lives = startingLives;
-        if (SceneManager.GetActiveScene().name == "MainMenu")
+        if (SceneManager.GetActiveScene().name == "Menu")
         {
             State = GameState.Menu;
+            BindMenuButtons();
+            ShowGuide(false);
         }
         else
         {
             State = GameState.Playing;
+        }
+    }
+
+    void CreateFadeCanvas()
+    {
+        GameObject fadeObj = new GameObject("FadeCanvas");
+        fadeObj.transform.SetParent(this.transform);
+        
+        Canvas canvas = fadeObj.AddComponent<Canvas>();
+        canvas.renderMode = RenderMode.ScreenSpaceOverlay;
+        canvas.sortingOrder = 999;
+
+        fadeObj.AddComponent<UnityEngine.UI.CanvasScaler>();
+        fadeObj.AddComponent<UnityEngine.UI.GraphicRaycaster>();
+
+        GameObject imgObj = new GameObject("FadeImage");
+        imgObj.transform.SetParent(fadeObj.transform, false);
+        
+        UnityEngine.UI.Image img = imgObj.AddComponent<UnityEngine.UI.Image>();
+        img.color = Color.black;
+        
+        RectTransform rt = img.GetComponent<RectTransform>();
+        rt.anchorMin = Vector2.zero;
+        rt.anchorMax = Vector2.one;
+        rt.sizeDelta = Vector2.zero;
+
+        fadeGroup = fadeObj.AddComponent<CanvasGroup>();
+        fadeGroup.alpha = 0f;
+        fadeGroup.blocksRaycasts = false;
+        fadeGroup.interactable = false;
+    }
+
+    public void LoadSceneWithFade(string sceneName)
+    {
+        StartCoroutine(FadeAndLoad(sceneName, -1));
+    }
+
+    public void LoadSceneWithFade(int buildIndex)
+    {
+        StartCoroutine(FadeAndLoad(string.Empty, buildIndex));
+    }
+
+    private System.Collections.IEnumerator FadeAndLoad(string sceneName, int buildIndex)
+    {
+        Time.timeScale = 1f; // Ensure time scale is reset
+        if (fadeGroup != null)
+        {
+            fadeGroup.blocksRaycasts = true;
+            float t = 0f;
+            while (t < 0.5f)
+            {
+                t += Time.unscaledDeltaTime;
+                fadeGroup.alpha = Mathf.Clamp01(t / 0.5f);
+                yield return null;
+            }
+            fadeGroup.alpha = 1f;
+        }
+
+        if (!string.IsNullOrEmpty(sceneName))
+        {
+            SceneManager.LoadScene(sceneName);
+            yield return null; // Chờ 1 frame để scene mới khởi tạo xong
+        }
+        else
+        {
+            SceneManager.LoadScene(buildIndex);
+            yield return null;
+        }
+
+        if (fadeGroup != null)
+        {
+            float t = 0f;
+            while (t < 0.5f)
+            {
+                t += Time.unscaledDeltaTime;
+                fadeGroup.alpha = 1f - Mathf.Clamp01(t / 0.5f);
+                yield return null;
+            }
+            fadeGroup.alpha = 0f;
+            fadeGroup.blocksRaycasts = false; // Bỏ chặn click để người chơi tương tác
         }
     }
 
@@ -61,8 +223,15 @@ public class GameManager : MonoBehaviour
 
     void OnSceneLoaded(Scene scene, LoadSceneMode mode)
     {
-        if (scene.name == firstLevelScene || scene.name == level2Scene || scene.name == "Level3" || scene.name == "Level1")
+        if (scene.name == "Menu")
         {
+            State = GameState.Menu;
+            BindMenuButtons();
+            ShowGuide(false);
+        }
+        else if (scene.name == level1Scene || scene.name == level2Scene || scene.name == "Level3" || scene.name == "Level1")
+        {
+            State = GameState.Playing;
             SpawnItemsProcedurally();
             
             GameObject player = GameObject.FindGameObjectWithTag("Player");
@@ -74,7 +243,7 @@ public class GameManager : MonoBehaviour
                 
                 // Determine target distance
                 float targetDistance = 0f;
-                if (scene.name == "Level1" || scene.name == firstLevelScene) targetDistance = 1000f;
+                if (scene.name == "Level1" || scene.name == level1Scene) targetDistance = 1000f;
                 else if (scene.name == "Level2" || scene.name == level2Scene) targetDistance = 2000f;
                 else if (scene.name == "Level3") targetDistance = 4000f;
 
@@ -146,28 +315,38 @@ public class GameManager : MonoBehaviour
 
     void Update()
     {
-        if (State == GameState.Playing && playerRb != null)
+        if (State == GameState.Playing)
         {
-            float distance = playerRb.position.x - startXPos;
-            string sceneName = SceneManager.GetActiveScene().name;
-            float targetDistance = 0f;
-
-            if (sceneName == "Level1" || sceneName == firstLevelScene) targetDistance = 1000f;
-            else if (sceneName == "Level2" || sceneName == level2Scene) targetDistance = 2000f;
-            else if (sceneName == "Level3") targetDistance = 4000f;
-
-            if (targetDistance > 0 && distance >= targetDistance)
+            if (playerRb == null || playerController == null)
             {
-                if (playerController != null) playerController.SetFinished();
-                
-                // Add score bonus when finishing via distance
-                if (ScoreManager.Instance != null) ScoreManager.Instance.AddScore(1000);
-                if (AudioManager.Instance != null && AudioManager.Instance.sfxSource != null)
+                GameObject player = GameObject.FindGameObjectWithTag("Player");
+                if (player != null)
                 {
-                    // Optionally play a finish sound if we have one, otherwise just complete
+                    playerRb = player.GetComponent<Rigidbody2D>();
+                    playerController = player.GetComponent<PlayerController>();
+                    startXPos = player.transform.position.x;
                 }
+            }
 
-                LevelComplete();
+            if (playerRb != null)
+            {
+                float distance = playerRb.position.x - startXPos;
+                string sceneName = SceneManager.GetActiveScene().name;
+                float targetDistance = 0f;
+
+                if (sceneName == "Level1" || sceneName == level1Scene) targetDistance = 1000f;
+                else if (sceneName == "Level2" || sceneName == level2Scene) targetDistance = 2000f;
+                else if (sceneName == "Level3") targetDistance = 4000f;
+
+                if (targetDistance > 0 && distance >= targetDistance)
+                {
+                    if (playerController != null) playerController.SetFinished();
+                    
+                    // Add score bonus when finishing via distance
+                    if (ScoreManager.Instance != null) ScoreManager.Instance.AddScore(1000);
+
+                    LevelComplete(true); // Phát nhạc hoàn thành vì cán đích bằng khoảng cách
+                }
             }
         }
 
@@ -191,13 +370,17 @@ public class GameManager : MonoBehaviour
 
     void ReloadCurrentScene()
     {
-        SceneManager.LoadScene(SceneManager.GetActiveScene().buildIndex);
+        LoadSceneWithFade(SceneManager.GetActiveScene().buildIndex);
     }
 
-    public void LevelComplete()
+    public void LevelComplete(bool playSFX = true)
     {
         if (State == GameState.GameOver || State == GameState.LevelComplete) return;
         State = GameState.LevelComplete;
+        if (playSFX && AudioManager.Instance != null)
+        {
+            AudioManager.Instance.PlayFinishSound();
+        }
         if (UIManager.Instance != null) UIManager.Instance.ShowLevelCompletePanel();
     }
 
@@ -220,24 +403,28 @@ public class GameManager : MonoBehaviour
     public void StartGame()
     {
         Lives = startingLives;
-        State = GameState.Playing;
         Time.timeScale = 1f;
-        if (!string.IsNullOrEmpty(firstLevelScene))
+        if (ScoreManager.Instance != null) ScoreManager.Instance.ResetScore();
+        if (TrickDetector.Instance != null) TrickDetector.Instance.ResetAll();
+        if (!string.IsNullOrEmpty(level1Scene))
         {
-            SceneManager.LoadScene(firstLevelScene);
+            LoadSceneWithFade(level1Scene);
         }
         else
         {
-            SceneManager.LoadScene(1);
+            LoadSceneWithFade(1);
         }
     }
 
     public void RestartGame()
     {
         Lives = startingLives;
-        State = GameState.Playing;
         Time.timeScale = 1f;
-        SceneManager.LoadScene(SceneManager.GetActiveScene().buildIndex);
+
+        if (ScoreManager.Instance != null) ScoreManager.Instance.ResetScore();
+        if (TrickDetector.Instance != null) TrickDetector.Instance.ResetAll();
+
+        LoadSceneWithFade(SceneManager.GetActiveScene().buildIndex);
     }
 
     public void LoadNextLevel()
@@ -245,13 +432,13 @@ public class GameManager : MonoBehaviour
         Time.timeScale = 1f;
         string currentScene = SceneManager.GetActiveScene().name;
 
-        if (currentScene == "Level1" || currentScene == firstLevelScene)
+        if (currentScene == "Level1" || currentScene == level1Scene)
         {
-            SceneManager.LoadScene(!string.IsNullOrEmpty(level2Scene) ? level2Scene : "Level2");
+            LoadSceneWithFade(!string.IsNullOrEmpty(level2Scene) ? level2Scene : "Level2");
         }
         else if (currentScene == "Level2" || currentScene == level2Scene)
         {
-            SceneManager.LoadScene("Level3");
+            LoadSceneWithFade("Level3");
         }
         else if (currentScene == "Level3")
         {
@@ -259,7 +446,7 @@ public class GameManager : MonoBehaviour
         }
         else
         {
-            SceneManager.LoadScene(SceneManager.GetActiveScene().buildIndex + 1);
+            LoadSceneWithFade(SceneManager.GetActiveScene().buildIndex + 1);
         }
     }
 
@@ -268,17 +455,21 @@ public class GameManager : MonoBehaviour
         Time.timeScale = 1f;
         if (!string.IsNullOrEmpty(endScreenScene))
         {
-            SceneManager.LoadScene(endScreenScene);
+            LoadSceneWithFade(endScreenScene);
         }
         else
         {
-            SceneManager.LoadScene("MainMenu");
+            LoadSceneWithFade("Menu");
         }
     }
 
     public void QuitGame()
     {
+        #if UNITY_EDITOR
+        UnityEditor.EditorApplication.isPlaying = false;
+        #else
         Application.Quit();
+        #endif
         Debug.Log("Quit Game");
     }
 }

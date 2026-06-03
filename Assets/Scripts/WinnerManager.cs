@@ -24,8 +24,10 @@ public class WinnerManager : MonoBehaviour
         {
             menuButton.onClick.AddListener(() => 
             {
+                PlayClickSFX();
                 if (ScoreManager.Instance != null) ScoreManager.Instance.ResetScore();
-                SceneManager.LoadScene("MainMenu");
+                if (GameManager.Instance != null) GameManager.Instance.LoadSceneWithFade("Menu");
+                else SceneManager.LoadScene("Menu");
             });
         }
 
@@ -33,8 +35,9 @@ public class WinnerManager : MonoBehaviour
         {
             playAgainButton.onClick.AddListener(() => 
             {
+                PlayClickSFX();
                 if (ScoreManager.Instance != null) ScoreManager.Instance.ResetScore();
-                if (GameManager.Instance != null) GameManager.Instance.RestartGame();
+                if (GameManager.Instance != null) GameManager.Instance.StartGame();
                 else SceneManager.LoadScene("Level1");
             });
         }
@@ -43,9 +46,18 @@ public class WinnerManager : MonoBehaviour
         {
             quitButton.onClick.AddListener(() => 
             {
+                PlayClickSFX();
                 if (GameManager.Instance != null) GameManager.Instance.QuitGame();
                 else Application.Quit();
             });
+        }
+    }
+
+    private void PlayClickSFX()
+    {
+        if (AudioManager.Instance != null)
+        {
+            AudioManager.Instance.PlayMenuSelectSound();
         }
     }
 }

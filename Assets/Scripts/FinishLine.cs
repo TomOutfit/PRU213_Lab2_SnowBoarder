@@ -32,14 +32,21 @@ public class FinishLine : MonoBehaviour
             if (finishParticles != null)
                 finishParticles.Play();
 
-            AudioSource audioSource = GetComponent<AudioSource>();
-            if (audioSource != null && finishSound != null)
+            if (finishSound != null)
             {
-                audioSource.PlayOneShot(finishSound);
+                AudioSource audioSource = GetComponent<AudioSource>();
+                if (audioSource != null)
+                {
+                    audioSource.PlayOneShot(finishSound);
+                }
+                else if (AudioManager.Instance != null)
+                {
+                    AudioManager.Instance.sfxSource.PlayOneShot(finishSound);
+                }
             }
-            else if (AudioManager.Instance != null && finishSound != null)
+            else if (AudioManager.Instance != null)
             {
-                AudioManager.Instance.sfxSource.PlayOneShot(finishSound);
+                AudioManager.Instance.PlayFinishSound();
             }
 
             if (ScoreManager.Instance != null)
@@ -52,7 +59,7 @@ public class FinishLine : MonoBehaviour
     void TriggerFinish()
     {
         if (GameManager.Instance != null)
-            GameManager.Instance.LevelComplete();
+            GameManager.Instance.LevelComplete(false); // finish SFX already played
     }
 
     void OnEnable()

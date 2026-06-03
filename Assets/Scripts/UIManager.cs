@@ -88,6 +88,12 @@ public class UIManager : MonoBehaviour
 
     void Start()
     {
+        if (UnityEngine.SceneManagement.SceneManager.GetActiveScene().name == "Menu")
+        {
+            InitializeMenuUI();
+            return;
+        }
+
         if (timerText == null || speedText == null || distanceText == null || scoreText == null)
         {
             TextMeshProUGUI[] texts = Object.FindObjectsByType<TextMeshProUGUI>(FindObjectsInactive.Include);
@@ -150,12 +156,20 @@ public class UIManager : MonoBehaviour
                 if (btn.name.Contains("Restart"))
                 {
                     btn.onClick.RemoveAllListeners();
-                    btn.onClick.AddListener(() => { if (GameManager.Instance != null) GameManager.Instance.RestartGame(); });
+                    btn.onClick.AddListener(() => { 
+                        PlayClickSFX();
+                        if (gameOverCanvas != null) gameOverCanvas.gameObject.SetActive(false);
+                        if (GameManager.Instance != null) GameManager.Instance.RestartGame(); 
+                    });
                 }
                 else if (btn.name.Contains("Menu"))
                 {
                     btn.onClick.RemoveAllListeners();
-                    btn.onClick.AddListener(() => { UnityEngine.SceneManagement.SceneManager.LoadScene("MainMenu"); });
+                    btn.onClick.AddListener(() => { 
+                        PlayClickSFX();
+                        if (gameOverCanvas != null) gameOverCanvas.gameObject.SetActive(false);
+                        if (GameManager.Instance != null) GameManager.Instance.LoadSceneWithFade("Menu"); else UnityEngine.SceneManagement.SceneManager.LoadScene("Menu"); 
+                    });
                 }
             }
         }
@@ -169,17 +183,27 @@ public class UIManager : MonoBehaviour
                 if (btn.name.Contains("Restart"))
                 {
                     btn.onClick.RemoveAllListeners();
-                    btn.onClick.AddListener(() => { if (GameManager.Instance != null) GameManager.Instance.RestartGame(); });
+                    btn.onClick.AddListener(() => { 
+                        PlayClickSFX();
+                        if (levelCompleteCanvas != null) levelCompleteCanvas.gameObject.SetActive(false);
+                        if (GameManager.Instance != null) GameManager.Instance.RestartGame(); 
+                    });
                 }
                 else if (btn.name.Contains("Menu"))
                 {
                     btn.onClick.RemoveAllListeners();
-                    btn.onClick.AddListener(() => { UnityEngine.SceneManagement.SceneManager.LoadScene("MainMenu"); });
+                    btn.onClick.AddListener(() => { 
+                        PlayClickSFX();
+                        if (levelCompleteCanvas != null) levelCompleteCanvas.gameObject.SetActive(false);
+                        if (GameManager.Instance != null) GameManager.Instance.LoadSceneWithFade("Menu"); else UnityEngine.SceneManagement.SceneManager.LoadScene("Menu"); 
+                    });
                 }
                 else if (btn.name.Contains("Next") || btn.name.Contains("Level"))
                 {
                     btn.onClick.RemoveAllListeners();
                     btn.onClick.AddListener(() => { 
+                        PlayClickSFX();
+                        if (levelCompleteCanvas != null) levelCompleteCanvas.gameObject.SetActive(false);
                         if (GameManager.Instance != null) GameManager.Instance.LoadNextLevel();
                         else UnityEngine.SceneManagement.SceneManager.LoadScene("Level2"); 
                     });
@@ -191,30 +215,43 @@ public class UIManager : MonoBehaviour
         if (restartButton != null)
         {
             restartButton.onClick.RemoveAllListeners();
-            restartButton.onClick.AddListener(() => { if (GameManager.Instance != null) GameManager.Instance.RestartGame(); });
+            restartButton.onClick.AddListener(() => { 
+                PlayClickSFX();
+                if (GameManager.Instance != null) GameManager.Instance.RestartGame(); 
+            });
         }
         if (menuButton != null)
         {
             menuButton.onClick.RemoveAllListeners();
-            menuButton.onClick.AddListener(() => { UnityEngine.SceneManagement.SceneManager.LoadScene("MainMenu"); });
+            menuButton.onClick.AddListener(() => { 
+                PlayClickSFX();
+                if (GameManager.Instance != null) GameManager.Instance.LoadSceneWithFade("Menu"); else UnityEngine.SceneManagement.SceneManager.LoadScene("Menu"); 
+            });
         }
 
         if (startButton != null)
         {
             startButton.onClick.RemoveAllListeners();
-            startButton.onClick.AddListener(() => { if (GameManager.Instance != null) GameManager.Instance.StartGame(); });
+            startButton.onClick.AddListener(() => { 
+                PlayClickSFX();
+                if (GameManager.Instance != null) GameManager.Instance.StartGame(); 
+            });
         }
 
         if (quitButton != null)
         {
             quitButton.onClick.RemoveAllListeners();
-            quitButton.onClick.AddListener(() => { if (GameManager.Instance != null) GameManager.Instance.QuitGame(); });
+            quitButton.onClick.AddListener(() => { 
+                PlayClickSFX();
+                if (GameManager.Instance != null) GameManager.Instance.QuitGame(); 
+            });
         }
 
         if (guideButton != null)
         {
             guideButton.onClick.RemoveAllListeners();
             guideButton.onClick.AddListener(() => { 
+                PlayClickSFX();
                 if (guideCanvas != null) guideCanvas.gameObject.SetActive(true);
                 if (mainMenuCanvas != null) mainMenuCanvas.gameObject.SetActive(false);
             });
@@ -224,6 +261,7 @@ public class UIManager : MonoBehaviour
         {
             guideBackButton.onClick.RemoveAllListeners();
             guideBackButton.onClick.AddListener(() => { 
+                PlayClickSFX();
                 if (guideCanvas != null) guideCanvas.gameObject.SetActive(false);
                 if (mainMenuCanvas != null) mainMenuCanvas.gameObject.SetActive(true);
             });
@@ -434,6 +472,108 @@ public class UIManager : MonoBehaviour
             notificationText.text = message;
             notificationText.gameObject.SetActive(true);
             notificationTimer = notificationDuration;
+        }
+    }
+
+    void InitializeMenuUI()
+    {
+        Button[] btns = GetComponentsInChildren<Button>(true);
+        Button playBtn = null;
+        Button guideBtn = null;
+        Button quitBtn = null;
+        Button closeBtn = null;
+
+        foreach (var btn in btns)
+        {
+            string btnName = btn.name.ToLower();
+            if (btnName.Contains("play") || btnName.Contains("start")) playBtn = btn;
+            else if (btnName.Contains("quit") || btnName.Contains("exit")) quitBtn = btn;
+            else if (btnName.Contains("guide")) guideBtn = btn;
+            else if (btnName.Contains("close") || btnName.Contains("back")) closeBtn = btn;
+        }
+
+        Transform guidePanel = transform.Find("GuideCanva");
+        if (guidePanel == null)
+        {
+            for (int i = 0; i < transform.childCount; i++)
+            {
+                Transform child = transform.GetChild(i);
+                if (child.name.ToLower().Contains("guide") && !child.name.ToLower().Contains("button"))
+                {
+                    guidePanel = child;
+                    break;
+                }
+            }
+        }
+
+        System.Action<bool> toggleGuide = (show) => 
+        {
+            if (guidePanel != null) guidePanel.gameObject.SetActive(show);
+            
+            for (int i = 0; i < transform.childCount; i++)
+            {
+                Transform child = transform.GetChild(i);
+                string childName = child.name.ToLower();
+                if (child != guidePanel && (childName.Contains("button") || childName.Contains("title")))
+                {
+                    child.gameObject.SetActive(!show);
+                }
+            }
+        };
+
+        if (playBtn != null)
+        {
+            playBtn.onClick.RemoveAllListeners();
+            playBtn.onClick.AddListener(() => {
+                PlayClickSFX();
+                if (GameManager.Instance != null) GameManager.Instance.StartGame();
+                else UnityEngine.SceneManagement.SceneManager.LoadScene("Level1");
+            });
+        }
+
+        if (guideBtn != null)
+        {
+            guideBtn.onClick.RemoveAllListeners();
+            guideBtn.onClick.AddListener(() => {
+                PlayClickSFX();
+                toggleGuide(true);
+            });
+        }
+
+        if (quitBtn != null)
+        {
+            quitBtn.onClick.RemoveAllListeners();
+            quitBtn.onClick.AddListener(() => {
+                PlayClickSFX();
+                if (GameManager.Instance != null) GameManager.Instance.QuitGame();
+                else {
+                    #if UNITY_EDITOR
+                    UnityEditor.EditorApplication.isPlaying = false;
+                    #else
+                    Application.Quit();
+                    #endif
+                    Debug.Log("Quit Game");
+                }
+            });
+        }
+
+        if (closeBtn != null)
+        {
+            closeBtn.onClick.RemoveAllListeners();
+            closeBtn.onClick.AddListener(() => {
+                PlayClickSFX();
+                toggleGuide(false);
+            });
+        }
+
+        toggleGuide(false);
+    }
+
+    private void PlayClickSFX()
+    {
+        if (AudioManager.Instance != null)
+        {
+            AudioManager.Instance.PlayMenuSelectSound();
         }
     }
 

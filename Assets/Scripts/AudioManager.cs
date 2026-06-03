@@ -15,7 +15,7 @@ public class AudioManager : MonoBehaviour
     public AudioClip level2BGM;
     public AudioClip level3BGM;
 
-    [Header("Level1 Audio Clips")]
+    [Header("Level Audio Clips")]
     [SerializeField] AudioClip jumpClip;
     [SerializeField] AudioClip crashClip;
     [SerializeField] AudioClip collectClip;
@@ -48,12 +48,51 @@ public class AudioManager : MonoBehaviour
         else
         {
             Destroy(gameObject);
+            return;
         }
 
         if (sfxSource == null)
         {
             sfxSource = gameObject.AddComponent<AudioSource>();
             sfxSource.playOnAwake = false;
+        }
+
+        if (bgmSource == null)
+        {
+            bgmSource = gameObject.AddComponent<AudioSource>();
+            bgmSource.playOnAwake = false;
+        }
+
+        LoadBGMClipsIfNull();
+    }
+
+    void Start()
+    {
+        PlayBGMForScene(UnityEngine.SceneManagement.SceneManager.GetActiveScene().name);
+    }
+
+    void LoadBGMClipsIfNull()
+    {
+        if (menuBGM == null) menuBGM = Resources.Load<AudioClip>("BGM/muzaproduction-snowboard-show-short-121373");
+        if (level1BGM == null) level1BGM = Resources.Load<AudioClip>("BGM/muzaproduction-snowboard-show-121374");
+        if (level2BGM == null) level2BGM = Resources.Load<AudioClip>("BGM/phantasticbeats-jazzy-snow-452072");
+        if (level3BGM == null) level3BGM = Resources.Load<AudioClip>("BGM/villatic_music-christmas-snow-265212");
+
+        if (crashSFX == null) crashSFX = Resources.Load<AudioClip>("SFx/Crash SFX");
+        if (finishSFX == null) finishSFX = Resources.Load<AudioClip>("SFx/Finish SFX");
+        if (menuSelectSFX == null) menuSelectSFX = Resources.Load<AudioClip>("SFx/click1");
+
+        if (crashClip == null) crashClip = Resources.Load<AudioClip>("SFx/Crash SFX");
+        if (jumpClip == null) jumpClip = Resources.Load<AudioClip>("SFx/switch1");
+        if (collectClip == null) collectClip = Resources.Load<AudioClip>("SFx/click4");
+        if (trickClip == null) trickClip = Resources.Load<AudioClip>("SFx/Finish SFX");
+    }
+
+    public void PlayMenuSelectSound()
+    {
+        if (menuSelectSFX != null && sfxSource != null)
+        {
+            sfxSource.PlayOneShot(menuSelectSFX);
         }
     }
 
@@ -73,6 +112,12 @@ public class AudioManager : MonoBehaviour
     {
         AudioClip clip = collectClip != null ? collectClip : collectSFX;
         if (clip != null && sfxSource != null) sfxSource.PlayOneShot(clip);
+    }
+
+    public void PlaySlowDownSound()
+    {
+        AudioClip clip = jumpClip != null ? jumpClip : crashSFX;
+        if (clip != null && sfxSource != null) sfxSource.PlayOneShot(clip, 0.6f);
     }
 
     public void PlayTrickSuccessSound()
@@ -139,7 +184,7 @@ public class AudioManager : MonoBehaviour
         if (bgmSource == null) return;
         
         AudioClip clipToPlay = null;
-        if (sceneName == "MainMenu") clipToPlay = menuBGM;
+        if (sceneName == "Menu") clipToPlay = menuBGM;
         else if (sceneName == "Level1") clipToPlay = level1BGM;
         else if (sceneName == "Level2") clipToPlay = level2BGM;
         else if (sceneName == "Level3") clipToPlay = level3BGM;
@@ -159,6 +204,28 @@ public class AudioManager : MonoBehaviour
 
                 bgmSource.clip = clipToPlay;
                 bgmSource.Play();
+            }
+
+            // Dừng các AudioSource khác trong scene để tránh đè âm thanh (như AudioSource mặc định trong Menu)
+            AudioSource[] allSources = FindObjectsByType<AudioSource>(FindObjectsInactive.Exclude);
+            foreach (var src in allSources)
+            {
+                if (src != bgmSource && src != sfxSource && src != boardingSource)
+                {
+                    if (src.isPlaying)
+                    {
+                        src.Stop();
+                    }
+                }
+            }
+        }
+        else
+        {
+            // Dừng nhạc nếu scene không có nhạc nền được chỉ định
+            bgmSource.Stop();
+            if (musicSource != null)
+            {
+                musicSource.Stop();
             }
         }
     }

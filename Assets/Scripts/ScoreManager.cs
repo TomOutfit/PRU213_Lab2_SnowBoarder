@@ -58,14 +58,35 @@ public class ScoreManager : MonoBehaviour
     {
         if (GameManager.Instance != null && GameManager.Instance.State == GameManager.GameState.Playing)
         {
+            if (playerRb == null)
+            {
+                GameObject player = GameObject.FindGameObjectWithTag("Player");
+                if (player != null)
+                {
+                    playerRb = player.GetComponent<Rigidbody2D>();
+                }
+            }
+
+            // Giảm combo timer theo thời gian thực
+            if (comboTimer > 0f)
+            {
+                comboTimer -= Time.deltaTime;
+                if (comboTimer <= 0f)
+                {
+                    currentCombo = 1;
+                    OnScoreUpdated?.Invoke(CurrentScore);
+                }
+            }
+
+            float pointsThisFrame = pointsPerSecond * Time.deltaTime;
             if (playerRb != null && playerRb.linearVelocity.magnitude > speedBonusThreshold)
             {
-                speedBonusAccumulator += pointsPerSecond * speedBonusMultiplier * Time.deltaTime;
+                pointsThisFrame *= speedBonusMultiplier;
             }
-            else
-            {
-                speedBonusAccumulator += pointsPerSecond * Time.deltaTime;
-            }
+
+            // Nhân thêm hệ số combo hiện tại vào điểm thời gian thực
+            pointsThisFrame *= currentCombo;
+            speedBonusAccumulator += pointsThisFrame;
 
             if (speedBonusAccumulator >= 1f)
             {
@@ -81,6 +102,18 @@ public class ScoreManager : MonoBehaviour
     {
         CurrentScore += amount;
         OnScoreUpdated?.Invoke(CurrentScore);
+    }
+
+    public void IncrementComboMultiplier()
+    {
+        currentCombo = Mathf.Min(currentCombo + 1, maxCombo);
+        comboTimer = maxComboTimer;
+        OnScoreUpdated?.Invoke(CurrentScore);
+
+        if (UIManager.Instance != null)
+        {
+            UIManager.Instance.ShowFloatingText($"x{currentCombo} COMBO!", Vector3.zero);
+        }
     }
 
     public void AddTrickScore(int basePoints, int multiplier)

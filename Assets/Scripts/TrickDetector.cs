@@ -1,13 +1,14 @@
 using UnityEngine;
+using UnityEngine.InputSystem;
 
 public class TrickDetector : MonoBehaviour
 {
     public static TrickDetector Instance { get; private set; }
 
     [Header("Key Bindings")]
-    public KeyCode jumpKey = KeyCode.Space;
-    public KeyCode spinKey = KeyCode.Q;
-    public KeyCode flipKey = KeyCode.E;
+    public Key jumpKey = Key.Space;
+    public Key spinKey = Key.Q;
+    public Key flipKey = Key.E;
 
     [Header("Trick Settings")]
     public float trickCooldown = 0.5f;
@@ -78,6 +79,9 @@ public class TrickDetector : MonoBehaviour
                     if (UIManager.Instance != null)
                         UIManager.Instance.ShowFloatingText($"+{pendingScore} LANDED!", transform.position);
 
+                    if (AudioManager.Instance != null)
+                        AudioManager.Instance.PlayTrickSuccessSound(); // Phát âm thanh khi tiếp đất thành công
+
                     pendingScore = 0; // Đã cộng điểm xong
                 }
 
@@ -100,6 +104,13 @@ public class TrickDetector : MonoBehaviour
         currentCombo = 1;
         totalRotation = 0f;
         airTime = 0f;
-        pendingScore = 0; // Hủy bỏ điểm pending nếu bị crash (GameOver)
+        pendingScore = 0;
+    }
+
+    public void ResetAll()
+    {
+        ResetCombo();
+        lastTrickTime = -999f;
+        wasInAir = false;
     }
 }

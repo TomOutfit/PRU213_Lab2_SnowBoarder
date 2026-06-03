@@ -38,7 +38,8 @@ public class PlayerController : MonoBehaviour
     public AudioSource audioSource;
 
     Rigidbody2D surfaceEffectorRB;
-    SurfaceEffector2D surfaceEffector2D;
+    System.Collections.Generic.List<SurfaceEffector2D> surfaceEffectors = new System.Collections.Generic.List<SurfaceEffector2D>();
+    float rotationInput = 0f;
     bool canMove = true;
     bool isGrounded = false;
     public bool isInvincible = false;
@@ -51,14 +52,17 @@ public class PlayerController : MonoBehaviour
         startXPos = transform.position.x;
         if (rb == null) rb = GetComponent<Rigidbody2D>();
 
-        SurfaceEffector2D[] effectors = FindObjectsByType<SurfaceEffector2D>();
+        surfaceEffectors.Clear();
+        SurfaceEffector2D[] effectors = FindObjectsByType<SurfaceEffector2D>(FindObjectsInactive.Exclude);
         foreach (var effector in effectors)
         {
-            if (effector.gameObject.name.Contains("Level") || effector.gameObject.name.Contains("Ground") || effector.gameObject.name.Contains("Slope"))
+            if (effector.gameObject.name.Contains("Level") || effector.gameObject.name.Contains("Ground") || effector.gameObject.name.Contains("Slope") || effector.gameObject.CompareTag("Ground"))
             {
-                surfaceEffector2D = effector;
-                surfaceEffectorRB = effector.GetComponent<Rigidbody2D>();
-                break;
+                surfaceEffectors.Add(effector);
+                if (surfaceEffectorRB == null)
+                {
+                    surfaceEffectorRB = effector.GetComponent<Rigidbody2D>();
+                }
             }
         }
 
@@ -78,8 +82,7 @@ public class PlayerController : MonoBehaviour
 
         if (canMove)
         {
-            RotatePlayer();
-            RespondToBoost();
+            ReadRotationInput();
             RespondToJump();
         }
 
@@ -89,9 +92,39 @@ public class PlayerController : MonoBehaviour
         }
     }
 
+    void ReadRotationInput()
+    {
+        rotationInput = 0f;
+        if (UnityEngine.InputSystem.Keyboard.current == null) return;
+
+        if (UnityEngine.InputSystem.Keyboard.current.leftArrowKey.isPressed ||
+            UnityEngine.InputSystem.Keyboard.current.aKey.isPressed)
+        {
+            rotationInput = 1f;
+        }
+        else if (UnityEngine.InputSystem.Keyboard.current.rightArrowKey.isPressed ||
+                 UnityEngine.InputSystem.Keyboard.current.dKey.isPressed)
+        {
+            rotationInput = -1f;
+        }
+    }
+
     void FixedUpdate()
     {
         if (hasFinished || !canMove) return;
+
+        // Tính toán vật lý dốc, ma sát, trọng lực và đà trượt
+        UpdateSlopePhysics();
+
+        // Xoay nhân vật dựa trên rotationInput (Chạy ở FixedUpdate để đồng bộ vật lý, không phụ thuộc FPS)
+        if (rotationInput != 0f)
+        {
+            float currentTorque = isGrounded ? torqueAmount : torqueAmount * 2.5f;
+            rb.AddTorque(rotationInput * currentTorque);
+        }
+
+        // Áp dụng tốc độ/lực đẩy cho Surface Effectors
+        RespondToBoost();
 
         // Giữ tốc độ tối thiểu theo chiều X để người chơi không bao giờ đi quá chậm
         float targetXSpeed = baseSpeed * 0.9f; 
@@ -123,30 +156,51 @@ public class PlayerController : MonoBehaviour
             isGrounded = true;
             if (AudioManager.Instance != null) AudioManager.Instance.ResumeBoardingSound();
         }
-        else if (collision.gameObject.CompareTag("SlowDown") && !isInvincible)
+        else if (collision.gameObject.CompareTag("SlowDown"))
         {
-            ApplySlowDown(3f);
+            if (!isInvincible)
+            {
+                ApplySlowDown(3f);
+            }
+        }
+        else if (collision.gameObject.CompareTag("Obstacle") && isInvincible)
+        {
+            // Phá huỷ cây cối cản đường nếu đang bất tử để tránh bị kẹt
+            if (AudioManager.Instance != null) AudioManager.Instance.PlayCrashSound();
+            Destroy(collision.gameObject);
         }
     }
 
     private void OnTriggerEnter2D(Collider2D collision)
     {
-        if (collision.CompareTag("SlowDown") && !isInvincible)
+        if (collision.CompareTag("SlowDown"))
         {
-            ApplySlowDown(3f);
+            if (!isInvincible)
+            {
+                ApplySlowDown(3f);
+            }
         }
-        else if (collision.CompareTag("Penalty") && !isInvincible)
+        else if (collision.CompareTag("Penalty"))
         {
-            if (ScoreManager.Instance != null) ScoreManager.Instance.AddScore(-300);
-            if (UIManager.Instance != null) UIManager.Instance.ShowFloatingText("-300", transform.position);
-            
-            // Phá hủy tảng đá khi va chạm
+            if (!isInvincible)
+            {
+                if (ScoreManager.Instance != null) ScoreManager.Instance.AddScore(-300);
+                if (UIManager.Instance != null) UIManager.Instance.ShowFloatingText("-300", transform.position);
+                if (AudioManager.Instance != null) AudioManager.Instance.PlayCrashSound();
+                StartCoroutine(FlashRedCoroutine(0.5f));
+            }
+            Destroy(collision.gameObject);
+        }
+        else if (collision.CompareTag("Obstacle") && isInvincible)
+        {
+            if (AudioManager.Instance != null) AudioManager.Instance.PlayCrashSound();
             Destroy(collision.gameObject);
         }
     }
 
     public void ApplySlowDown(float duration)
     {
+        if (AudioManager.Instance != null) AudioManager.Instance.PlaySlowDownSound();
         StartCoroutine(SlowDownCoroutine(duration));
     }
 
@@ -158,7 +212,10 @@ public class PlayerController : MonoBehaviour
         baseSpeed *= 0.5f;
         boostSpeed *= 0.5f;
         
-        if (surfaceEffector2D != null) surfaceEffector2D.speed = baseSpeed;
+        foreach (var effector in surfaceEffectors)
+        {
+            if (effector != null) effector.speed = baseSpeed;
+        }
         if (UIManager.Instance != null) UIManager.Instance.ShowFloatingText("SLOWED!", transform.position);
         
         // Hiệu ứng màu bùn đất lên nhân vật
@@ -168,10 +225,23 @@ public class PlayerController : MonoBehaviour
 
         baseSpeed = originalBase;
         boostSpeed = originalBoost;
-        if (surfaceEffector2D != null) surfaceEffector2D.speed = baseSpeed;
+        foreach (var effector in surfaceEffectors)
+        {
+            if (effector != null) effector.speed = baseSpeed;
+        }
         
         // Trả lại màu gốc
-        if (playerSprite != null) playerSprite.color = Color.white; 
+        if (playerSprite != null) playerSprite.color = isInvincible ? Color.cyan : Color.white; 
+    }
+
+    private System.Collections.IEnumerator FlashRedCoroutine(float duration)
+    {
+        if (playerSprite != null)
+        {
+            playerSprite.color = Color.red;
+            yield return new WaitForSeconds(duration);
+            playerSprite.color = isInvincible ? Color.cyan : Color.white;
+        }
     }
 
     private void OnCollisionExit2D(Collision2D collision)
@@ -194,48 +264,101 @@ public class PlayerController : MonoBehaviour
         DisableControls();
     }
 
-    void RotatePlayer()
-    {
-        if (UnityEngine.InputSystem.Keyboard.current == null) return;
-
-        // Tăng lực xoay (torque) lên gấp 2-3 lần khi đang ở trên không để dễ làm trick lộn nhào hơn
-        float currentTorque = isGrounded ? torqueAmount : torqueAmount * 2.5f;
-
-        if (UnityEngine.InputSystem.Keyboard.current.leftArrowKey.isPressed ||
-            UnityEngine.InputSystem.Keyboard.current.aKey.isPressed)
-        {
-            rb.AddTorque(currentTorque);
-        }
-        else if (UnityEngine.InputSystem.Keyboard.current.rightArrowKey.isPressed ||
-                 UnityEngine.InputSystem.Keyboard.current.dKey.isPressed)
-        {
-            rb.AddTorque(-currentTorque);
-        }
-    }
-
     void RespondToBoost()
     {
         if (UnityEngine.InputSystem.Keyboard.current == null) return;
 
-        if (surfaceEffector2D != null)
+        bool isBoosting = UnityEngine.InputSystem.Keyboard.current.upArrowKey.isPressed ||
+                          UnityEngine.InputSystem.Keyboard.current.wKey.isPressed;
+
+        if (surfaceEffectors.Count > 0)
         {
-            if (UnityEngine.InputSystem.Keyboard.current.upArrowKey.isPressed ||
-                UnityEngine.InputSystem.Keyboard.current.wKey.isPressed)
+            float targetSpeed = isBoosting ? boostSpeed : baseSpeed;
+            targetSpeed += slopeSpeedBoost; // Cộng dynamic boost từ độ dốc
+            targetSpeed = Mathf.Max(targetSpeed, baseSpeed * 0.5f); // Tốc độ không giảm quá 50% baseSpeed
+
+            foreach (var effector in surfaceEffectors)
             {
-                surfaceEffector2D.speed = boostSpeed;
-            }
-            else
-            {
-                surfaceEffector2D.speed = baseSpeed;
+                if (effector != null) effector.speed = targetSpeed;
             }
         }
         else if (surfaceEffectorRB != null)
         {
-            if (UnityEngine.InputSystem.Keyboard.current.upArrowKey.isPressed ||
-                UnityEngine.InputSystem.Keyboard.current.wKey.isPressed)
+            float targetForce = isBoosting ? moveForce : moveForce * 0.5f;
+            if (slopeSpeedBoost > 0) targetForce += slopeSpeedBoost * 2f;
+            surfaceEffectorRB.AddForce(Vector2.right * targetForce);
+        }
+    }
+
+    void UpdateSlopePhysics()
+    {
+        // 1. Raycast từ nhân vật xuống dưới theo hướng đứng để tìm mặt đất
+        RaycastHit2D hit = Physics2D.Raycast(transform.position, Vector2.down, 3.5f);
+        bool groundFound = false;
+
+        if (hit.collider != null)
+        {
+            // Kiểm tra xem collider có phải là Ground hay Level không
+            if (hit.collider.CompareTag("Ground") || hit.collider.gameObject.name.Contains("Level") || hit.collider.gameObject.name.Contains("Slope"))
             {
-                surfaceEffectorRB.AddForce(Vector2.right * moveForce);
+                groundFound = true;
             }
+        }
+
+        if (groundFound)
+        {
+            Vector2 normal = hit.normal;
+            
+            // Tính góc dốc (độ) giữa Vector pháp tuyến bề mặt và Vector hướng lên thẳng đứng
+            slopeAngle = Vector2.Angle(normal, Vector2.up);
+
+            // Xác định hệ số trọng lực dựa trên độ dốc (dốc càng cao, tác dụng trọng lực dọc dốc càng mạnh)
+            gravityMultiplier = 1f + (slopeAngle / 45f) * 0.5f;
+
+            // slopeDirection: normal.x > 0 là dốc xuống bên phải (thuận chiều trượt); normal.x < 0 là dốc lên
+            if (normal.x > 0.02f)
+            {
+                // Dốc xuống: Tăng tốc độ trượt tỉ lệ với góc dốc, ma sát giảm
+                slopeSpeedBoost = slopeAngle * 0.4f;
+                friction = 0.01f;
+            }
+            else if (normal.x < -0.02f)
+            {
+                // Dốc lên: Giảm tốc độ trượt (slopeSpeedBoost âm), ma sát tăng
+                slopeSpeedBoost = -slopeAngle * 0.6f;
+                friction = 0.15f;
+            }
+            else
+            {
+                // Đường bằng phẳng
+                slopeSpeedBoost = 0f;
+                friction = 0.05f;
+            }
+
+            // 2. Tính toán và áp dụng lực kéo dọc theo sườn dốc (đà trượt / momentum)
+            // Vector tiếp tuyến sườn dốc hướng xuống/về phía trước (+X)
+            Vector2 slopeTangent = new Vector2(normal.y, -normal.x).normalized;
+            
+            // Trọng lượng kéo dọc dốc: F = mass * g * sin(slopeAngle)
+            float g = Physics2D.gravity.magnitude;
+            float gravityForceComponent = Mathf.Sin(slopeAngle * Mathf.Deg2Rad) * g * gravityMultiplier;
+
+            // Áp dụng lực gia tốc dọc dốc lên Rigidbody2D
+            rb.AddForce(slopeTangent * gravityForceComponent * rb.mass * 0.4f);
+
+            // 3. Áp dụng lực ma sát động cản trở chuyển động dựa trên hệ số ma sát
+            if (rb.linearVelocity.magnitude > 0.1f)
+            {
+                rb.AddForce(-rb.linearVelocity.normalized * friction * rb.mass * 6f);
+            }
+        }
+        else
+        {
+            // Khi đang bay trên không (In Air)
+            slopeAngle = 0f;
+            slopeSpeedBoost = 0f;
+            gravityMultiplier = 1f;
+            friction = 0.02f; // Sức cản không khí nhỏ
         }
     }
 
@@ -263,7 +386,10 @@ public class PlayerController : MonoBehaviour
         baseSpeed *= 1.5f;
         boostSpeed *= 1.5f;
         
-        if (surfaceEffector2D != null) surfaceEffector2D.speed = baseSpeed;
+        foreach (var effector in surfaceEffectors)
+        {
+            if (effector != null) effector.speed = baseSpeed;
+        }
         if (UIManager.Instance != null) UIManager.Instance.ShowFloatingText("SPEED UP!", transform.position);
         if (playerSprite != null) playerSprite.color = Color.cyan;
         
@@ -271,7 +397,10 @@ public class PlayerController : MonoBehaviour
         
         baseSpeed = originalBase;
         boostSpeed = originalBoost;
-        if (surfaceEffector2D != null) surfaceEffector2D.speed = baseSpeed;
+        foreach (var effector in surfaceEffectors)
+        {
+            if (effector != null) effector.speed = baseSpeed;
+        }
         if (playerSprite != null) playerSprite.color = Color.white;
     }
 
@@ -303,4 +432,13 @@ public class PlayerController : MonoBehaviour
     }
 
     public bool IsGrounded() { return isGrounded; }
+
+    public void ResetAll()
+    {
+        canMove = true;
+        isGrounded = false;
+        hasFinished = false;
+        isInvincible = false;
+        isBlinking = false;
+    }
 }
