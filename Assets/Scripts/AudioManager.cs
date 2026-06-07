@@ -184,7 +184,7 @@ public class AudioManager : MonoBehaviour
         if (bgmSource == null) return;
         
         AudioClip clipToPlay = null;
-        if (sceneName == "Menu") clipToPlay = menuBGM;
+        if (sceneName == "Menu" || sceneName == "Winner") clipToPlay = menuBGM;
         else if (sceneName == "Level1") clipToPlay = level1BGM;
         else if (sceneName == "Level2") clipToPlay = level2BGM;
         else if (sceneName == "Level3") clipToPlay = level3BGM;

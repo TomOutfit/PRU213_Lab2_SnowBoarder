@@ -284,6 +284,8 @@ public class UIManager : MonoBehaviour
                 if (mainMenuCanvas != null) mainMenuCanvas.gameObject.SetActive(true);
             });
         }
+
+        InitializeNotificationText();
     }
 
     void Update()
@@ -463,15 +465,96 @@ public class UIManager : MonoBehaviour
             }
             Destroy(floatText, 1.5f);
         }
+
+        // Show directly on screen as notification as well
+        ShowNotification(message);
     }
 
     public void ShowNotification(string message)
     {
+        InitializeNotificationText();
         if (notificationText != null)
         {
             notificationText.text = message;
             notificationText.gameObject.SetActive(true);
             notificationTimer = notificationDuration;
+        }
+    }
+
+    void InitializeNotificationText()
+    {
+        if (notificationText != null) return;
+
+        // 1. Try to find an existing TextMeshProUGUI in the scene with "notification" in its name
+        TextMeshProUGUI[] allTexts = Object.FindObjectsByType<TextMeshProUGUI>(FindObjectsInactive.Include);
+        foreach (var t in allTexts)
+        {
+            if (t.name.ToLower().Contains("notification"))
+            {
+                notificationText = t;
+                return;
+            }
+        }
+
+        // 2. Try to find HUD Canvas or Game Canvas to spawn it
+        Canvas hudCanvas = gameHUDCanvas;
+        if (hudCanvas == null)
+        {
+            Canvas[] allCanvases = Object.FindObjectsByType<Canvas>(FindObjectsInactive.Include);
+            foreach (var c in allCanvases)
+            {
+                if (c.name.ToLower().Contains("hud") || c.name.ToLower().Contains("game"))
+                {
+                    hudCanvas = c;
+                    break;
+                }
+            }
+            if (hudCanvas == null && allCanvases.Length > 0)
+            {
+                hudCanvas = allCanvases[0];
+            }
+        }
+
+        if (hudCanvas != null)
+        {
+            // Create new GameObject
+            GameObject notificationGO = new GameObject("DynamicNotificationText");
+            notificationGO.transform.SetParent(hudCanvas.transform, false);
+
+            // Add TextMeshProUGUI component
+            notificationText = notificationGO.AddComponent<TextMeshProUGUI>();
+
+            // Configure RectTransform layout (centered, upper middle screen)
+            RectTransform rect = notificationGO.GetComponent<RectTransform>();
+            if (rect != null)
+            {
+                rect.anchorMin = new Vector2(0.5f, 0.75f);
+                rect.anchorMax = new Vector2(0.5f, 0.75f);
+                rect.pivot = new Vector2(0.5f, 0.5f);
+                rect.anchoredPosition = new Vector2(0f, 0f);
+                rect.sizeDelta = new Vector2(800f, 120f);
+            }
+
+            // Configure typography
+            notificationText.fontSize = 36f;
+            notificationText.alignment = TextAlignmentOptions.Center;
+            notificationText.color = new Color(1f, 0.85f, 0f); // Sleek Golden Yellow
+            notificationText.fontStyle = FontStyles.Bold | FontStyles.Italic;
+            notificationText.outlineColor = Color.black;
+            notificationText.outlineWidth = 0.25f;
+            notificationText.textWrappingMode = TextWrappingModes.NoWrap;
+
+            // Inherit font asset if available
+            foreach (var t in allTexts)
+            {
+                if (t.font != null)
+                {
+                    notificationText.font = t.font;
+                    break;
+                }
+            }
+
+            notificationGO.SetActive(false);
         }
     }
 
