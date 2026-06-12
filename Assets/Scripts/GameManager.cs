@@ -22,6 +22,8 @@ public class GameManager : MonoBehaviour
 
     void Awake()
     {
+        endScreenScene = "Winner";
+
         // Thiết lập đồng bộ khung hình VSync và giới hạn FPS để tốc độ game luôn mượt mà và ổn định
         QualitySettings.vSyncCount = 1;
         Application.targetFrameRate = 60;
@@ -453,6 +455,11 @@ public class GameManager : MonoBehaviour
     public void LoadEndScreen()
     {
         Time.timeScale = 1f;
+        if (endScreenScene == "EndScreen")
+        {
+            endScreenScene = "Winner";
+        }
+        
         if (!string.IsNullOrEmpty(endScreenScene))
         {
             LoadSceneWithFade(endScreenScene);

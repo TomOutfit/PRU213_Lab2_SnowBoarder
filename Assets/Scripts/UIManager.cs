@@ -198,14 +198,14 @@ public class UIManager : MonoBehaviour
                         if (GameManager.Instance != null) GameManager.Instance.LoadSceneWithFade("Menu"); else UnityEngine.SceneManagement.SceneManager.LoadScene("Menu"); 
                     });
                 }
-                else if (btn.name.Contains("Next") || btn.name.Contains("Level"))
+                else if (btn.name.Contains("Next") || btn.name.Contains("Level") || btn.name.ToLower().Contains("overall"))
                 {
                     btn.onClick.RemoveAllListeners();
                     btn.onClick.AddListener(() => { 
                         PlayClickSFX();
                         if (levelCompleteCanvas != null) levelCompleteCanvas.gameObject.SetActive(false);
                         if (GameManager.Instance != null) GameManager.Instance.LoadNextLevel();
-                        else UnityEngine.SceneManagement.SceneManager.LoadScene("Level2"); 
+                        else UnityEngine.SceneManagement.SceneManager.LoadScene("Winner"); 
                     });
                 }
             }
@@ -426,13 +426,13 @@ public class UIManager : MonoBehaviour
             Button[] btns = levelCompleteCanvas.GetComponentsInChildren<Button>(true);
             foreach (var btn in btns)
             {
-                if (btn.name.Contains("Next") || btn.name.Contains("Level"))
+                if (btn.name.Contains("Next") || btn.name.Contains("Level") || btn.name.ToLower().Contains("overall"))
                 {
                     TextMeshProUGUI btnText = btn.GetComponentInChildren<TextMeshProUGUI>(true);
                     if (btnText != null)
                     {
                         if (UnityEngine.SceneManagement.SceneManager.GetActiveScene().name == "Level3")
-                            btnText.text = "Finish";
+                            btnText.text = "Overall";
                         else
                             btnText.text = "Next Level";
                     }
