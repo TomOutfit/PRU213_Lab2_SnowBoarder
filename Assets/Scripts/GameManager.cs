@@ -235,6 +235,7 @@ public class GameManager : MonoBehaviour
         {
             State = GameState.Playing;
             SpawnItemsProcedurally();
+            SpawnWeatherManager();
             
             GameObject player = GameObject.FindGameObjectWithTag("Player");
             if (player != null)
@@ -467,6 +468,16 @@ public class GameManager : MonoBehaviour
         else
         {
             LoadSceneWithFade("Menu");
+        }
+    }
+
+    void SpawnWeatherManager()
+    {
+        GameObject weatherObj = GameObject.Find("WeatherManager");
+        if (weatherObj == null)
+        {
+            weatherObj = new GameObject("WeatherManager");
+            weatherObj.AddComponent<WeatherManager>();
         }
     }
 

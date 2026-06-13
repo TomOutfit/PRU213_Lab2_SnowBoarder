@@ -12254,6 +12254,53 @@ Transform:
   m_Children: []
   m_Father: {fileID: 72258043}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1 &1115019822
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1115019824}
+  - component: {fileID: 1115019823}
+  m_Layer: 0
+  m_Name: WeatherManager
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &1115019823
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1115019822}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a0cfbfcde2655a34a8d664e121a6187a, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::WeatherManager
+  activeWeather: 0
+  baseWindForce: 0
+  currentWindForce: 0
+--- !u!4 &1115019824
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1115019822}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &1130115339
 GameObject:
   m_ObjectHideFlags: 0
@@ -24927,10 +24974,11 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::TrickDetector
   jumpKey: 32
-  spinKey: 113
-  flipKey: 101
+  indyGrabKey: 31
+  methodGrabKey: 19
   trickCooldown: 0.5
   inputBufferTime: 0.2
+  grabInterval: 0.4
 --- !u!114 &1824253748
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -25858,3 +25906,4 @@ SceneRoots:
   - {fileID: 1829222002}
   - {fileID: 1767380600}
   - {fileID: 2008687564}
+  - {fileID: 1115019824}
