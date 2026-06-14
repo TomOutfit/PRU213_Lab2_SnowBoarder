@@ -49,6 +49,37 @@ public class PlayerController : MonoBehaviour
 
     void Start()
     {
+        // Cấu hình tốc độ linh hoạt theo từng Level để đảm bảo trải nghiệm chơi mượt mà và thử thách cân bằng
+        string sceneName = UnityEngine.SceneManagement.SceneManager.GetActiveScene().name;
+        if (sceneName == "Level1")
+        {
+            baseSpeed = 26f;
+            boostSpeed = 38f;
+            maxSpeed = 50f;
+            moveForce = 30f;
+        }
+        else if (sceneName == "Level2")
+        {
+            baseSpeed = 29f; // Bù đắp nhẹ cho WindySnow (6N)
+            boostSpeed = 41f;
+            maxSpeed = 54f;
+            moveForce = 35f;
+        }
+        else if (sceneName == "Level3")
+        {
+            baseSpeed = 32f; // Bù đắp cho Blizzard (12N)
+            boostSpeed = 44f;
+            maxSpeed = 58f;
+            moveForce = 40f;
+        }
+        else
+        {
+            baseSpeed = 26f;
+            boostSpeed = 38f;
+            maxSpeed = 50f;
+            moveForce = 30f;
+        }
+
         startXPos = transform.position.x;
         if (rb == null) rb = GetComponent<Rigidbody2D>();
 
