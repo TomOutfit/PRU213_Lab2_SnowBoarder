@@ -24,6 +24,10 @@ public class PlayerController : MonoBehaviour
     [Header("Crash Settings")]
     public float crashRotationThreshold = 80f;
 
+    [Header("Brake Settings")]
+    public float brakeForce = 60f;       // Lực hãm áp dụng ngược chiều chuyển động
+    public float brakeMinSpeed = 0.35f;  // Tốc độ sàn khi hãm (tỉ lệ so với baseSpeed, ~35%)
+
     [Header("Trick Settings")]
     public float trickCooldown = 0.5f;
     public int maxComboTricks = 5;
@@ -40,6 +44,7 @@ public class PlayerController : MonoBehaviour
     Rigidbody2D surfaceEffectorRB;
     System.Collections.Generic.List<SurfaceEffector2D> surfaceEffectors = new System.Collections.Generic.List<SurfaceEffector2D>();
     float rotationInput = 0f;
+    bool isBraking = false;
     bool canMove = true;
     bool isGrounded = false;
     public bool isInvincible = false;
@@ -126,6 +131,7 @@ public class PlayerController : MonoBehaviour
     void ReadRotationInput()
     {
         rotationInput = 0f;
+        isBraking = false;
         if (UnityEngine.InputSystem.Keyboard.current == null) return;
 
         if (UnityEngine.InputSystem.Keyboard.current.leftArrowKey.isPressed ||
@@ -137,6 +143,13 @@ public class PlayerController : MonoBehaviour
                  UnityEngine.InputSystem.Keyboard.current.dKey.isPressed)
         {
             rotationInput = -1f;
+        }
+
+        // Phím hãm tốc: S hoặc mũi tên xuống
+        if (UnityEngine.InputSystem.Keyboard.current.downArrowKey.isPressed ||
+            UnityEngine.InputSystem.Keyboard.current.sKey.isPressed)
+        {
+            isBraking = true;
         }
     }
 
@@ -158,19 +171,35 @@ public class PlayerController : MonoBehaviour
         RespondToBoost();
 
         // Giữ tốc độ tối thiểu theo chiều X để người chơi không bao giờ đi quá chậm
-        float targetXSpeed = baseSpeed * 0.9f; 
-        
+        // Khi gió giật mạnh (Blizzard Gust): hạ ngưỡng và giảm lực bù để gió thực sự ảnh hưởng
+        float gustRatio = (WeatherManager.Instance != null) ? WeatherManager.Instance.GustIntensityRatio : 0f;
+
+        // Ngưỡng tối thiểu giảm tỉ lệ với cường độ gust (tối đa giảm ~50% về 0.45x baseSpeed)
+        float minSpeedMultiplier = Mathf.Lerp(0.9f, 0.45f, gustRatio);
+        float targetXSpeed = baseSpeed * minSpeedMultiplier;
+
         if (UnityEngine.InputSystem.Keyboard.current != null && 
             (UnityEngine.InputSystem.Keyboard.current.upArrowKey.isPressed || 
              UnityEngine.InputSystem.Keyboard.current.wKey.isPressed))
         {
-            targetXSpeed = boostSpeed * 0.95f; // Ép tốc độ sát với BoostSpeed nhất có thể
+            // Khi đang boost, ngưỡng mục tiêu cũng giảm một phần khi có gust
+            float boostMultiplier = Mathf.Lerp(0.95f, 0.65f, gustRatio);
+            targetXSpeed = boostSpeed * boostMultiplier;
         }
 
         if (rb.linearVelocity.x < targetXSpeed)
         {
-            // Bù lực đẩy cực mạnh về phía trước (đặc biệt khi đang bay trên không hoặc leo dốc)
-            rb.AddForce(Vector2.right * moveForce * 4f);
+            // Lực bù về phía trước giảm xuống theo cường độ gust — gust mạnh hơn => bù ít hơn
+            float compensationScale = Mathf.Lerp(4f, 1.2f, gustRatio);
+            rb.AddForce(Vector2.right * moveForce * compensationScale);
+        }
+
+
+        // --- HÃEM TỐC (S / Mũi tên xuống) ---
+        if (isBraking && rb.linearVelocity.x > baseSpeed * brakeMinSpeed)
+        {
+            // Áp dụng lực cản ngược chiều vector vận tốc (phanh vật lý)
+            rb.AddForce(-rb.linearVelocity.normalized * brakeForce);
         }
 
         // Giới hạn tốc độ tối đa để không bay mất kiểm soát
@@ -304,9 +333,23 @@ public class PlayerController : MonoBehaviour
 
         if (surfaceEffectors.Count > 0)
         {
-            float targetSpeed = isBoosting ? boostSpeed : baseSpeed;
+            float targetSpeed;
+            if (isBoosting)
+            {
+                targetSpeed = boostSpeed;
+            }
+            else if (isBraking)
+            {
+                // Hãm tốc: giảm surface effector speed xuống mức sàn brakeMinSpeed
+                targetSpeed = Mathf.Max(baseSpeed * brakeMinSpeed, baseSpeed * 0.35f);
+            }
+            else
+            {
+                targetSpeed = baseSpeed;
+            }
+
             targetSpeed += slopeSpeedBoost; // Cộng dynamic boost từ độ dốc
-            targetSpeed = Mathf.Max(targetSpeed, baseSpeed * 0.5f); // Tốc độ không giảm quá 50% baseSpeed
+            targetSpeed = Mathf.Max(targetSpeed, baseSpeed * brakeMinSpeed); // Không thấp hơn sàn
 
             foreach (var effector in surfaceEffectors)
             {
@@ -315,7 +358,7 @@ public class PlayerController : MonoBehaviour
         }
         else if (surfaceEffectorRB != null)
         {
-            float targetForce = isBoosting ? moveForce : moveForce * 0.5f;
+            float targetForce = isBoosting ? moveForce : isBraking ? moveForce * 0.15f : moveForce * 0.5f;
             if (slopeSpeedBoost > 0) targetForce += slopeSpeedBoost * 2f;
             surfaceEffectorRB.AddForce(Vector2.right * targetForce);
         }

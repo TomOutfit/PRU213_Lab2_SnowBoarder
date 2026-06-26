@@ -15,6 +15,14 @@ public class WeatherManager : MonoBehaviour
     public float currentWindForce = 0f;
     private float targetWindForce = 0f;
 
+    /// <summary>True khi đang trong cơn gió giật (Blizzard Gust)</summary>
+    public bool IsGustActive { get; private set; } = false;
+
+    /// <summary>Tỉ lệ cường độ gió giật so với base (0 = bình thường, 1 = đỉnh gust)</summary>
+    public float GustIntensityRatio => baseWindForce > 0f
+        ? Mathf.Clamp01((currentWindForce - baseWindForce) / (baseWindForce * 1.3f))
+        : 0f;
+
     [Header("Camera Shake Settings")]
     private float shakeDuration = 0f;
     private float shakeMagnitude = 0f;
@@ -326,6 +334,7 @@ public class WeatherManager : MonoBehaviour
             UIManager.Instance.ShowNotification("WARNING: GIÓ GIẬT CỰC MẠNH! (BLIZZARD GUST!)");
         }
 
+        IsGustActive = true;
         float originalWindForce = baseWindForce;
         targetWindForce = originalWindForce * 2.3f; // Significant force increase
 
@@ -342,6 +351,7 @@ public class WeatherManager : MonoBehaviour
         yield return new WaitForSeconds(1.8f);
 
         // Reset to normal Blizzard conditions
+        IsGustActive = false;
         targetWindForce = originalWindForce;
         if (windAudio != null)
         {
