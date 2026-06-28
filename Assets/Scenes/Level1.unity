@@ -9922,7 +9922,6 @@ MonoBehaviour:
   m_DeselectOnBackgroundClick: 1
   m_PointerBehavior: 0
   m_CursorLockBehavior: 0
-  m_ScrollDeltaPerTick: 6
 --- !u!114 &593395522
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -25966,6 +25965,8 @@ MonoBehaviour:
   slopeAngle: 0
   jumpForce: 10
   crashRotationThreshold: 80
+  brakeForce: 60
+  brakeMinSpeed: 0.35
   trickCooldown: 0.5
   maxComboTricks: 5
   invincibilityDuration: 3
